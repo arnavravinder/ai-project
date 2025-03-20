@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SupertailsAI - Transcript Analysis</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.css">
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body id="app">
+    <header>
+        <div class="brand">
+            <i class="fas fa-robot fa-lg" style="color: var(--primary);"></i>
+            <h1>SupertailsAI</h1>
+        </div>
+    </header>
+
+    <main>
+        <div class="container">
+            <div class="card" data-aos="fade-up">
+                <div id="upload-section">
+                    <div class="upload-container" id="dropArea">
+                        <div class="upload-icon">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <div class="upload-text">
+                            <h3>Upload Transcript</h3>
+                            <p>Drop your transcript file here or click the button below to browse</p>
+                        </div>
+                        <label for="fileInput" class="btn">
+                            <i class="fas fa-upload"></i> Choose File
+                        </label>
+                        <input type="file" id="fileInput" class="file-input" accept=".txt,.doc,.docx,.pdf,.mp3">
+                        <div id="fileName" class="file-name"></div>
+                        <div id="fileFeedback" class="file-feedback"></div>
+                    </div>
+                </div>
+
+                <div id="loading-section" class="loading-container">
+                    <div class="loader"></div>
+                    <div class="loader-text">Processing your transcript...</div>
+                    <p>This might take a moment. We're analyzing your transcript to provide the best experience.</p>
+                </div>
+
+                <div id="chat-section" class="chat-container">
+                    <div class="chat-header">
+                        <div class="chat-title">
+                            <i class="fas fa-comments"></i>
+                            <h3>Transcript Assistant</h3>
+                        </div>
+                        <button id="newTranscript" class="btn btn-outline">
+                            <i class="fas fa-plus"></i> New Transcript
+                        </button>
+                    </div>
+                    
+                    <div class="chat-body" id="chatMessages">
+                        <div class="message">
+                            <div class="avatar bot-avatar">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="message-content">
+                                <div class="message-text">Hi there! I've processed your transcript. Ask me any questions about it and I'll do my best to provide insights and answers.</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-footer">
+                        <i class="fas fa-question-circle chat-input-icon"></i>
+                        <input type="text" class="chat-input" id="userInput" placeholder="Ask about your transcript...">
+                        <button class="chat-submit" id="sendMessage">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>AI responses might be incorrect. Verify important information.</p>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
