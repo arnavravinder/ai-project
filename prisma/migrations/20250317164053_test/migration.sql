@@ -1,3 +1,0 @@
--- AlterTable
-ALTER TABLE "Battle" ALTER COLUMN "effect" DROP NOT NULL,
-ALTER COLUMN "effect" DROP DEFAULT;
