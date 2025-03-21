@@ -807,9 +807,9 @@ AOS.init({
     console.log("Sending prompt (first 200 chars):", prompt.substring(0, 200) + "...");
     
     try {
-      console.log("Making API request to https://solvr-api.vercel.app/api/gemini");
+      console.log("Making API request to https://supertails.vercel.app/api/gemini");
       
-      const response = await fetch("https://solvr-api.vercel.app/api/gemini", {
+      const response = await fetch("https://supertails.vercel.app/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt })
