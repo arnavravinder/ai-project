@@ -802,7 +802,7 @@ AOS.init({
   
   User question: ${userMessage}
   
-  Answer the question based ONLY on information found in the transcript. If you cannot find relevant information in the transcript to answer the question, simply state "I don't see that information in the transcript." DO NOT make up information or provide general knowledge that isn't in the transcript. You must answer in the same language the question is asked in, regardless of the orignal language of the transcript`;
+  Answer the question based ONLY on information found in the transcript. If you cannot find relevant information in the transcript to answer the question, simply state "I don't see that information in the transcript." DO NOT make up information or provide general knowledge that isn't in the transcript. You must answer in the same language the question is asked in, regardless of the orignal language of the transcript. Spell check your answers before sending, eg we're talking about pets, so 'vet' is what ill be used mostly, not 'wet'. The companys name is SuperTails, autocorrect that even if the transcript has a mistake. If asked for the entire transcript, you may provide it, but please autocorrect any issues with the transcript eg spellings grammer etc. Remember that MOSTLY, pet names will be in english, and these words will mean something, so please make sure you are providing smart well thought-out responses.`;
     
     console.log("Sending prompt (first 200 chars):", prompt.substring(0, 200) + "...");
     
