@@ -530,7 +530,7 @@ AOS.init({
     
     const formData = new FormData();
     formData.append('file', file);
-    // Append the language selection from the dropdown.
+    // Append language selection from the dropdown.
     const languageSelect = document.getElementById('languageSelect');
     const languageValue = languageSelect ? languageSelect.value : 'auto';
     formData.append('language', languageValue);

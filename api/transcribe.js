@@ -55,13 +55,16 @@ async function uploadAudio(filePath) {
   }
 }
 
-// Request a transcription job from AssemblyAI. If a language code is provided, it’s added to the request.
+// Request a transcription job from AssemblyAI.
+// If languageCode is not "auto", send it as language_code; if it's "auto", enable auto-detection.
 async function requestTranscription(audioUrl, languageCode) {
   const url = "https://api.assemblyai.com/v2/transcript";
   console.log("Requesting transcription for audio URL:", audioUrl, "with language code:", languageCode);
   const jsonData = { audio_url: audioUrl };
-  if (languageCode) {
+  if (languageCode && languageCode !== "auto") {
     jsonData["language_code"] = languageCode;
+  } else if (languageCode === "auto") {
+    jsonData["language_detection"] = true;
   }
   const response = await fetch(url, {
     method: "POST",
@@ -144,18 +147,18 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "No file provided" });
     }
 
-    // Get language field from form (defaults to "auto" if not provided)
+    // Read language field from form (default to "auto" if not provided)
     const languageCode = fields.language || "auto";
     console.log("Language code received:", languageCode);
 
     const filePath = files.file.filepath || files.file.path;
     console.log("File received, stored at:", filePath);
     try {
-      // Upload the file to AssemblyAI.
+      // Upload file to AssemblyAI.
       const audioUrl = await uploadAudio(filePath);
-      // Request transcription with the chosen language.
+      // Request transcription with the selected language option.
       const transcriptId = await requestTranscription(audioUrl, languageCode);
-      // Poll until transcription is complete.
+      // Poll until transcription completes.
       const transcriptionText = await pollTranscription(transcriptId);
       console.log("Returning transcription text.");
       res.status(200).setHeader("Content-Type", "text/plain").send(transcriptionText);
