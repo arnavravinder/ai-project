@@ -2,18 +2,18 @@ AOS.init({
     duration: 800,
     easing: 'ease-in-out',
     once: true
-});
-
-const elements = {};
-const defaultTranscript = "This is a sample transcript. It contains information about various topics that you can ask about. Feel free to ask questions related to this content and our AI will analyze it for you.";
-let currentTranscript = defaultTranscript;
-let isSpecialPromptActive = false;
-let activeSpecialPromptButton = null;
-let allTranscripts = [];
-let analyticsData = null;
-let currentAudioFile = null;
-
-function initChat() {
+  });
+  
+  const elements = {};
+  const defaultTranscript = "This is a sample transcript. It contains information about various topics that you can ask about. Feel free to ask questions related to this content and our AI will analyze it for you.";
+  let currentTranscript = defaultTranscript;
+  let isSpecialPromptActive = false;
+  let activeSpecialPromptButton = null;
+  let allTranscripts = [];
+  let analyticsData = null;
+  let currentAudioFile = null;
+  
+  function initChat() {
     console.log("Initializing chat interface");
     
     elements.uploadSection = document.getElementById('upload-section');
@@ -119,9 +119,9 @@ function initChat() {
         window.location.hash = '';
         window.location.reload();
     }
-}
-
-function modifyUploadSection() {
+  }
+  
+  function modifyUploadSection() {
     const uploadSection = elements.uploadSection;
     if (!uploadSection) return;
     
@@ -224,9 +224,9 @@ function modifyUploadSection() {
             showFileFeedback('error', 'Please upload an audio file first');
         }
     });
-}
-
-function addViewToggleButtons() {
+  }
+  
+  function addViewToggleButtons() {
     const headerRight = document.querySelector('header .brand');
     if (!headerRight) return;
     
@@ -264,9 +264,9 @@ function addViewToggleButtons() {
             toggleView(viewType);
         });
     });
-}
-
-function toggleView(viewType) {
+  }
+  
+  function toggleView(viewType) {
     const chatView = document.getElementById('main-chat-view');
     const analyticsView = document.getElementById('analytics-view');
     
@@ -278,9 +278,9 @@ function toggleView(viewType) {
         analyticsView.style.display = 'block';
         updateAnalytics();
     }
-}
-
-function createAnalyticsView() {
+  }
+  
+  function createAnalyticsView() {
     const mainElement = document.querySelector('main');
     if (!mainElement) return;
     
@@ -379,9 +379,9 @@ function createAnalyticsView() {
     mainElement.appendChild(analyticsView);
     
     setupAnalyticsListeners();
-}
-
-function setupAnalyticsListeners() {
+  }
+  
+  function setupAnalyticsListeners() {
     const analyticsFileInput = document.getElementById('analyticsFileInput');
     const analyticsDropArea = document.getElementById('analyticsDropArea');
     
@@ -417,9 +417,9 @@ function setupAnalyticsListeners() {
             }
         });
     }
-}
-
-function handleMultipleFileUpload(files) {
+  }
+  
+  function handleMultipleFileUpload(files) {
     const fileList = document.getElementById('analyticsFileList');
     const analyticsFeedback = document.getElementById('analyticsFeedback');
     
@@ -476,9 +476,9 @@ function handleMultipleFileUpload(files) {
         analyticsFeedback.className = 'file-feedback error';
         analyticsFeedback.style.display = 'block';
     }
-}
-
-function processMultipleFiles(files) {
+  }
+  
+  function processMultipleFiles(files) {
     const fileList = document.getElementById('analyticsFileList');
     const analyticsFeedback = document.getElementById('analyticsFeedback');
     
@@ -538,154 +538,100 @@ function processMultipleFiles(files) {
                 reader.readAsText(file);
             } else {
                 reader.readAsArrayBuffer(file);
-                analyzeTranscriptForAnalytics(`[Binary content from ${file.name}]`, file.name, fileItem, () => {
-                    updateProgress();
-                });
+                currentTranscript = `[Binary content from ${file.name}]`;
+                showFileFeedback('success', 'File uploaded successfully. Click to process.');
             }
         }
     });
-}
-
-function processAudioFileForAnalytics(file, fileItem, callback) {
+  }
+  
+  function processAudioFileForAnalytics(file, fileItem, callback) {
     const statusSpan = fileItem.querySelector('.file-item-status');
     statusSpan.textContent = 'Transcribing audio...';
     
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const fileReader = new FileReader();
+    // For analytics, you might use a similar approach to our chat transcription:
+    const formData = new FormData();
+    formData.append('file', file);
     
-    fileReader.onload = function(e) {
-        const arrayBuffer = e.target.result;
-        
-        audioContext.decodeAudioData(arrayBuffer)
-            .then(function(audioBuffer) {
-                const offlineContext = new OfflineAudioContext(
-                    audioBuffer.numberOfChannels,
-                    audioBuffer.length,
-                    audioBuffer.sampleRate
-                );
-                
-                const source = offlineContext.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(offlineContext.destination);
-                source.start(0);
-                
-                return offlineContext.startRendering();
-            })
-            .then(function(renderedBuffer) {
-                const transcription = transcribeAudio(renderedBuffer);
-                statusSpan.textContent = 'Analyzing transcript...';
-                
-                analyzeTranscriptForAnalytics(transcription, file.name, fileItem, callback);
-            })
-            .catch(function(err) {
-                console.error('Audio processing error:', err);
-                statusSpan.textContent = 'Error';
-                statusSpan.style.color = 'var(--danger)';
-                if (callback) callback();
-            });
-    };
-    
-    fileReader.readAsArrayBuffer(file);
-}
-
-function transcribeAudio(audioBuffer) {
-    const transcriptionPlaceholder = `[This transcript was generated from an audio file]
-    
-    Customer: Hi, I'm calling about my dog Max. He's been having some digestive issues lately.
-    Support: Hello! I'm sorry to hear about Max. Can you tell me more about his symptoms?
-    Customer: He's been vomiting after meals sometimes, and seems less active than usual.
-    Support: I understand. What kind of food does Max eat? And how old is he?
-    Customer: He's a 3-year-old golden retriever. I feed him dry kibble twice a day.
-    Support: Has there been any change in his diet recently?
-    Customer: Well, I did switch brands about two weeks ago.
-    Support: That could be contributing to the issue. Let's talk about how we might address this...`;
-    
-    return transcriptionPlaceholder;
-}
-
-function transcribeAudioFileWithWebSpeechAPI(audioFile, onComplete) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    if (!SpeechRecognition) {
-        onComplete("Browser doesn't support speech recognition. Using simulated transcript instead.\n\n" + 
-                 transcribeAudio(null));
-        return;
-    }
-    
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-    
-    let transcriptParts = [];
-    
-    recognition.onresult = function(event) {
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            if (event.results[i].isFinal) {
-                transcriptParts.push(event.results[i][0].transcript);
-            }
+    fetch("https://supertails.vercel.app/api/transcribe", {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error("Transcription API returned an error");
         }
-    };
+        return response.text();
+    })
+    .then(transcriptText => {
+        statusSpan.textContent = 'Analyzing transcript...';
+        analyzeTranscriptForAnalytics(transcriptText, file.name, fileItem, callback);
+    })
+    .catch(error => {
+        console.error("Error transcribing audio for analytics:", error);
+        statusSpan.textContent = 'Error';
+        statusSpan.style.color = 'var(--danger)';
+        callback();
+    });
+  }
+  
+  // --- New function: use our transcription API for chat ---
+  function transcribeAudioFileForChat(file) {
+    if (!file) return;
     
-    recognition.onerror = function(event) {
-        console.error("Speech recognition error", event.error);
-        onComplete("Error in speech recognition. Using simulated transcript instead.\n\n" + 
-                  transcribeAudio(null));
-    };
+    showFileFeedback('info', 'Transcribing audio... This may take a moment.');
     
-    recognition.onend = function() {
-        if (transcriptParts.length === 0) {
-            onComplete("Could not transcribe audio. Using simulated transcript instead.\n\n" + 
-                      transcribeAudio(null));
-        } else {
-            onComplete(transcriptParts.join(' '));
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    fetch("https://supertails.vercel.app/api/transcribe", {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error("Transcription API returned an error");
         }
-    };
-    
-    const audioUrl = URL.createObjectURL(audioFile);
-    const audio = new Audio(audioUrl);
-    
-    audio.onended = function() {
-        recognition.stop();
-    };
-    
-    try {
-        recognition.start();
-        audio.play();
-    } catch (e) {
-        console.error("Error starting recognition or playing audio", e);
-        onComplete("Error transcribing audio. Using simulated transcript instead.\n\n" + 
-                  transcribeAudio(null));
-    }
-}
-
-function analyzeTranscriptForAnalytics(transcriptText, fileName, fileItem, callback) {
+        return response.text();
+    })
+    .then(transcriptText => {
+        currentTranscript = transcriptText;
+        showFileFeedback('success', 'Audio transcribed successfully! Click to process.');
+    })
+    .catch(error => {
+        console.error("Error transcribing audio:", error);
+        showFileFeedback('error', 'Error transcribing audio. Using default transcript.');
+        currentTranscript = defaultTranscript;
+    });
+  }
+  
+  function analyzeTranscriptForAnalytics(transcriptText, fileName, fileItem, callback) {
     const statusSpan = fileItem ? fileItem.querySelector('.file-item-status') : null;
     if (statusSpan) {
         statusSpan.textContent = 'Analyzing...';
     }
     
     const prompt = `
-You're analyzing a pet care conversation transcript. Extract these details:
-1. Pet parent name
-2. Pet type (dog/cat/both/other)
-3. Pet name(s)
-4. Knowledge level (rate 1-10, where 1-3=low, 4-7=medium, 8-10=high)
-5. Key issues mentioned
-
-Respond ONLY in this JSON format:
-{
-  "petParent": "name or unknown",
-  "petType": "dog/cat/both/other",
-  "petNames": ["name1", "name2"],
-  "knowledgeLevel": 5,
-  "knowledgeCategory": "low/medium/high",
-  "keyIssues": "brief summary of main problems"
-}
-
-Transcript:
-${transcriptText}
-`;
+  You're analyzing a pet care conversation transcript. Extract these details:
+  1. Pet parent name
+  2. Pet type (dog/cat/both/other)
+  3. Pet name(s)
+  4. Knowledge level (rate 1-10, where 1-3=low, 4-7=medium, 8-10=high)
+  5. Key issues mentioned
+  
+  Respond ONLY in this JSON format:
+  {
+    "petParent": "name or unknown",
+    "petType": "dog/cat/both/other",
+    "petNames": ["name1", "name2"],
+    "knowledgeLevel": 5,
+    "knowledgeCategory": "low/medium/high",
+    "keyIssues": "brief summary of main problems"
+  }
+  
+  Transcript:
+  ${transcriptText}
+  `;
     
     fetch("https://solvr-api.vercel.app/api/gemini", {
         method: "POST",
@@ -773,9 +719,9 @@ ${transcriptText}
         
         if (callback) callback();
     });
-}
-
-function updateAnalytics() {
+  }
+  
+  function updateAnalytics() {
     if (allTranscripts.length === 0) return;
     
     const totalTranscripts = document.getElementById('totalTranscripts');
@@ -869,9 +815,9 @@ function updateAnalytics() {
             petsTableBody.appendChild(row);
         });
     }
-}
-
-function addSpecialPromptButtons() {
+  }
+  
+  function addSpecialPromptButtons() {
     if (!elements.chatFooter) return;
     
     const buttonContainer = document.createElement('div');
@@ -894,9 +840,9 @@ function addSpecialPromptButtons() {
     buttonContainer.appendChild(dietButton);
     
     elements.chatFooter.insertBefore(buttonContainer, elements.chatFooter.firstChild);
-}
-
-function createSpecialPromptButton(label, prompt) {
+  }
+  
+  function createSpecialPromptButton(label, prompt) {
     const button = document.createElement('button');
     button.textContent = label;
     button.className = 'special-prompt-btn';
@@ -928,9 +874,9 @@ function createSpecialPromptButton(label, prompt) {
     });
     
     return button;
-}
-
-function addMovingBorder(element) {
+  }
+  
+  function addMovingBorder(element) {
     if (!element) return;
     
     element.classList.add('moving-border');
@@ -959,9 +905,9 @@ function addMovingBorder(element) {
         `;
         document.head.appendChild(style);
     }
-}
-
-function sendSpecialPrompt(promptText) {
+  }
+  
+  function sendSpecialPrompt(promptText) {
     if (!elements.userInput) return;
     
     elements.userInput.value = '';
@@ -969,9 +915,9 @@ function sendSpecialPrompt(promptText) {
     
     addTypingIndicator();
     sendToGeminiAPI(promptText, currentTranscript, true);
-}
-
-function handleFileUpload(file) {
+  }
+  
+  function handleFileUpload(file) {
     if (!file) {
         console.error("No file provided");
         return;
@@ -1048,29 +994,9 @@ function handleFileUpload(file) {
             showFileFeedback('success', 'File uploaded successfully. Click to process.');
         }
     }
-}
-
-function transcribeAudioFileForChat(file) {
-    if (!file) return;
-    
-    showFileFeedback('info', 'Transcribing audio... This may take a moment.');
-    
-    transcribeAudioFileWithWebSpeechAPI(file, transcriptText => {
-        currentTranscript = transcriptText;
-        showFileFeedback('success', 'Audio transcribed successfully! Click to process.');
-    });
-}
-
-function showFileFeedback(type, message) {
-    console.log(`Showing ${type} feedback:`, message);
-    if (elements.fileFeedback) {
-        elements.fileFeedback.textContent = message;
-        elements.fileFeedback.className = `file-feedback ${type}`;
-        elements.fileFeedback.style.display = 'block';
-    }
-}
-
-function processTranscript() {
+  }
+  
+  function processTranscript() {
     console.log("Processing transcript:", currentTranscript.substring(0, 50) + "...");
     
     if (!currentTranscript) {
@@ -1087,9 +1013,9 @@ function processTranscript() {
         elements.chatSection.style.display = 'flex';
         scrollChatToBottom();
     }, 1000);
-}
-
-function resetToUpload() {
+  }
+  
+  function resetToUpload() {
     console.log("Resetting to upload screen");
     
     if (elements.chatSection) elements.chatSection.style.display = 'none';
@@ -1127,9 +1053,9 @@ function resetToUpload() {
         btn.classList.remove('active-special-prompt');
         btn.classList.remove('moving-border');
     });
-}
-
-function sendMessage() {
+  }
+  
+  function sendMessage() {
     if (!elements.userInput) {
         console.error("User input element not found");
         return;
@@ -1151,9 +1077,9 @@ function sendMessage() {
     addTypingIndicator();
     
     sendToGeminiAPI(userMessage, currentTranscript);
-}
-
-function formatMarkdown(text) {
+  }
+  
+  function formatMarkdown(text) {
     if (!text) return text;
     
     let formattedText = text;
@@ -1167,9 +1093,9 @@ function formatMarkdown(text) {
     formattedText = formattedText.replace(/\n/g, '<br>');
     
     return formattedText;
-}
-
-function addMessageToChat(type, text, isSpecialPrompt = false) {
+  }
+  
+  function addMessageToChat(type, text, isSpecialPrompt = false) {
     console.log(`Adding ${type} message to chat:`, text.substring(0, 50) + (text.length > 50 ? "..." : ""));
     
     if (!elements.chatMessages) {
@@ -1216,9 +1142,9 @@ function addMessageToChat(type, text, isSpecialPrompt = false) {
     
     elements.chatMessages.appendChild(messageDiv);
     scrollChatToBottom();
-}
-
-function addTypingIndicator() {
+  }
+  
+  function addTypingIndicator() {
     console.log("Adding typing indicator");
     
     if (!elements.chatMessages) {
@@ -1245,9 +1171,9 @@ function addTypingIndicator() {
     
     elements.chatMessages.appendChild(typingIndicator);
     scrollChatToBottom();
-}
-
-function removeTypingIndicator() {
+  }
+  
+  function removeTypingIndicator() {
     console.log("Removing typing indicator");
     
     const typingIndicator = document.getElementById('typingIndicator');
@@ -1256,29 +1182,29 @@ function removeTypingIndicator() {
     } else {
         console.warn("Typing indicator not found");
     }
-}
-
-function scrollChatToBottom() {
+  }
+  
+  function scrollChatToBottom() {
     if (elements.chatMessages) {
         elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
     }
-}
-
-async function sendToGeminiAPI(userMessage, transcriptContent, isSpecialPrompt = false) {
+  }
+  
+  async function sendToGeminiAPI(userMessage, transcriptContent, isSpecialPrompt = false) {
     console.log("Sending to Gemini API...");
     console.log("User message:", userMessage);
     console.log("Transcript length:", transcriptContent.length);
     
     const prompt = `You are analyzing a transcript of a conversation. The transcript may contain spelling mistakes or unclear text due to AI transcription, but please ignore these issues and don't mention them.
-
-IMPORTANT: Focus only on answering the user's question based on information found in the transcript.
-
-Transcript:
-${transcriptContent}
-
-User question: ${userMessage}
-
-Answer the question based ONLY on information found in the transcript. If you cannot find relevant information in the transcript to answer the question, simply state "I don't see that information in the transcript." DO NOT make up information or provide general knowledge that isn't in the transcript. You must answer in the same language the question is asked in, regardless of the orignal language of the transcript`;
+  
+  IMPORTANT: Focus only on answering the user's question based on information found in the transcript.
+  
+  Transcript:
+  ${transcriptContent}
+  
+  User question: ${userMessage}
+  
+  Answer the question based ONLY on information found in the transcript. If you cannot find relevant information in the transcript to answer the question, simply state "I don't see that information in the transcript." DO NOT make up information or provide general knowledge that isn't in the transcript. You must answer in the same language the question is asked in, regardless of the orignal language of the transcript`;
     
     console.log("Sending prompt (first 200 chars):", prompt.substring(0, 200) + "...");
     
@@ -1361,9 +1287,10 @@ Answer the question based ONLY on information found in the transcript. If you ca
         
         addMessageToChat('bot', "I'm sorry, there was an error processing your request. Please try again.", isSpecialPrompt);
     }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
+  }
+  
+  document.addEventListener('DOMContentLoaded', () => {
     console.log("DOM loaded, initializing app");
     initChat();
-});
+  });
+  
