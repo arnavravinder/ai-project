@@ -33,6 +33,15 @@
               <i class="fas fa-upload"></i> Choose File
             </label>
             <input type="file" id="fileInput" class="file-input" accept=".txt,.doc,.docx,.pdf,.mp3">
+            <!-- New language selection dropdown -->
+            <div class="language-select">
+              <label for="languageSelect">Language Spoken:</label>
+              <select id="languageSelect">
+                <option value="en">English</option>
+                <option value="hi">Hindi</option>
+                <option value="auto">Don't know (Auto Detect)</option>
+              </select>
+            </div>
             <div id="fileName" class="file-name"></div>
             <div id="fileFeedback" class="file-feedback"></div>
           </div>

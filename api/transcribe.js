@@ -1,5 +1,3 @@
-// api/transcribe.js
-
 const fs = require("fs");
 const formidable = require("formidable");
 const fetch = require("node-fetch");
@@ -57,17 +55,21 @@ async function uploadAudio(filePath) {
   }
 }
 
-// Request a transcription job from AssemblyAI.
-async function requestTranscription(audioUrl) {
+// Request a transcription job from AssemblyAI. If a language code is provided, it’s added to the request.
+async function requestTranscription(audioUrl, languageCode) {
   const url = "https://api.assemblyai.com/v2/transcript";
-  console.log("Requesting transcription for audio URL:", audioUrl);
+  console.log("Requesting transcription for audio URL:", audioUrl, "with language code:", languageCode);
+  const jsonData = { audio_url: audioUrl };
+  if (languageCode) {
+    jsonData["language_code"] = languageCode;
+  }
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "authorization": ASSEMBLYAI_API_KEY,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ audio_url: audioUrl }),
+    body: JSON.stringify(jsonData),
   });
   const text = await response.text();
   console.log("Transcription request response text:", text);
@@ -129,12 +131,8 @@ export default async function handler(req, res) {
 
   console.log("Received POST request for transcription.");
 
-  // Parse the multipart/form-data using formidable.
-  const form = formidable({
-    multiples: false,
-    keepExtensions: true,
-    uploadDir: "/tmp",
-  });
+  // Parse multipart/form-data using formidable.
+  const form = formidable({ multiples: false, keepExtensions: true, uploadDir: "/tmp" });
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
@@ -146,18 +144,20 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "No file provided" });
     }
 
-    // For some versions of formidable, the file path is in `filepath` or `path`.
+    // Get language field from form (defaults to "auto" if not provided)
+    const languageCode = fields.language || "auto";
+    console.log("Language code received:", languageCode);
+
     const filePath = files.file.filepath || files.file.path;
     console.log("File received, stored at:", filePath);
     try {
       // Upload the file to AssemblyAI.
       const audioUrl = await uploadAudio(filePath);
-      // Request the transcription job.
-      const transcriptId = await requestTranscription(audioUrl);
-      // Poll until the transcription is complete.
+      // Request transcription with the chosen language.
+      const transcriptId = await requestTranscription(audioUrl, languageCode);
+      // Poll until transcription is complete.
       const transcriptionText = await pollTranscription(transcriptId);
       console.log("Returning transcription text.");
-      // Return the transcription as plain text.
       res.status(200).setHeader("Content-Type", "text/plain").send(transcriptionText);
     } catch (error) {
       console.error("Error during transcription process:", error);

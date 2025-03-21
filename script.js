@@ -530,6 +530,10 @@ AOS.init({
     
     const formData = new FormData();
     formData.append('file', file);
+    // Append the language selection from the dropdown.
+    const languageSelect = document.getElementById('languageSelect');
+    const languageValue = languageSelect ? languageSelect.value : 'auto';
+    formData.append('language', languageValue);
     
     fetch("https://supertails.vercel.app/api/transcribe", {
       method: 'POST',
@@ -556,9 +560,11 @@ AOS.init({
     const statusSpan = fileItem.querySelector('.file-item-status');
     statusSpan.textContent = 'Transcribing audio...';
     
-    // Use our transcription API for analytics as well:
     const formData = new FormData();
     formData.append('file', file);
+    const languageSelect = document.getElementById('languageSelect');
+    const languageValue = languageSelect ? languageSelect.value : 'auto';
+    formData.append('language', languageValue);
     
     fetch("https://supertails.vercel.app/api/transcribe", {
       method: 'POST',
