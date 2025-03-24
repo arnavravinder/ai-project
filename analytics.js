@@ -258,33 +258,33 @@ function initializeAnalytics() {
         if (!ctx) return;
         
         try {
-          ctx.innerHTML = '';
-          window.petDistributionChart = null;
+          if (window.petDistributionChart) {
+            window.petDistributionChart.destroy();
+          }
           
+          // Clear previous canvas
+          ctx.innerHTML = '';
+          
+          // Create container with fixed dimensions
           const container = document.createElement('div');
           container.style.width = '100%';
           container.style.height = '170px';
-          container.style.maxWidth = '250px';
+          container.style.maxWidth = '300px';
           container.style.margin = '0 auto';
           container.style.position = 'relative';
-          container.className = 'pet-chart-container';
           
+          // Create canvas inside container
           const canvas = document.createElement('canvas');
           canvas.id = 'petDistributionChartCanvas';
           container.appendChild(canvas);
           ctx.appendChild(container);
-          
-          if (typeof Chart === 'undefined') {
-            console.error("Chart.js is not loaded");
-            return;
-          }
           
           window.petDistributionChart = new Chart(canvas, {
             type: 'pie',
             data: {
               labels: ['Dogs', 'Cats', 'Both/Other'],
               datasets: [{
-                data: [1, 1, 1],
+                data: [0, 0, 0],
                 backgroundColor: [
                   'rgba(64, 185, 255, 0.7)',
                   'rgba(140, 82, 255, 0.7)',
@@ -307,17 +307,17 @@ function initializeAnalytics() {
                   labels: {
                     color: 'rgba(255, 255, 255, 0.7)',
                     font: {
-                      size: 10
+                      size: 11
                     },
-                    padding: 5,
-                    boxWidth: 10
+                    padding: 10,
+                    boxWidth: 12
                   }
                 },
                 tooltip: {
                   backgroundColor: 'rgba(20, 20, 30, 0.9)',
                   titleColor: '#fff',
                   bodyColor: '#fff',
-                  padding: 6
+                  padding: 8
                 }
               }
             }
@@ -716,17 +716,27 @@ function initializeAnalytics() {
       },
       
       updatePetDistributionChart() {
+        // First, check if the chart container exists
+        const ctx = document.getElementById('petDistributionChart');
+        if (!ctx) return;
+        
         try {
+          // If the chart is not properly initialized, recreate it
           if (!window.petDistributionChart) {
             this.initPetDistributionChart();
-            if (!window.petDistributionChart) return;
           }
           
-          const dogCount = this.filteredData.filter(item => item.petType === 'dog').length || 1;
-          const catCount = this.filteredData.filter(item => item.petType === 'cat').length || 1;
-          const otherCount = this.filteredData.filter(item => 
-            item.petType === 'both' || item.petType === 'unknown').length || 1;
+          // Check again after initialization attempt
+          if (!window.petDistributionChart || !window.petDistributionChart.data || !window.petDistributionChart.data.datasets) {
+            console.error("Pet distribution chart not properly initialized");
+            return;
+          }
           
+          const dogCount = this.filteredData.filter(item => item.petType === 'dog').length;
+          const catCount = this.filteredData.filter(item => item.petType === 'cat').length;
+          const otherCount = this.filteredData.filter(item => item.petType === 'both' || item.petType === 'unknown').length;
+          
+          // Add additional safety check before updating data
           if (window.petDistributionChart && 
               window.petDistributionChart.data && 
               window.petDistributionChart.data.datasets && 
@@ -737,19 +747,121 @@ function initializeAnalytics() {
           }
         } catch (error) {
           console.error("Error updating pet distribution chart:", error);
-          setTimeout(() => {
-            try {
-              const ctx = document.getElementById('petDistributionChart');
-              if (ctx) ctx.innerHTML = '';
-              window.petDistributionChart = null;
-              this.initPetDistributionChart();
-            } catch (e) {
-              console.error("Error reinitializing chart:", e);
-            }
-          }, 500);
+          // Try to reinitialize the chart
+          setTimeout(() => this.initPetDistributionChart(), 500);
         }
       },
       
+      initPetDistributionChart() {
+        const ctx = document.getElementById('petDistributionChart');
+        if (!ctx) return;
+        
+        try {
+          // Safely destroy existing chart if it exists
+          if (window.petDistributionChart) {
+            try {
+              window.petDistributionChart.destroy();
+            } catch (e) {
+              console.error("Error destroying existing chart:", e);
+            }
+            window.petDistributionChart = null;
+          }
+          
+          // Clear previous canvas
+          ctx.innerHTML = '';
+          
+          // Create container with fixed dimensions
+          const container = document.createElement('div');
+          container.style.width = '100%';
+          container.style.height = '170px';
+          container.style.maxWidth = '300px';
+          container.style.margin = '0 auto';
+          container.style.position = 'relative';
+          
+          // Create canvas inside container
+          const canvas = document.createElement('canvas');
+          canvas.id = 'petDistributionChartCanvas';
+          container.appendChild(canvas);
+          ctx.appendChild(container);
+          
+          // Define chart data
+          const chartData = {
+            labels: ['Dogs', 'Cats', 'Both/Other'],
+            datasets: [{
+              data: [0, 0, 0],
+              backgroundColor: [
+                'rgba(64, 185, 255, 0.7)',
+                'rgba(140, 82, 255, 0.7)',
+                'rgba(76, 175, 80, 0.7)'
+              ],
+              borderColor: [
+                'rgba(64, 185, 255, 1)',
+                'rgba(140, 82, 255, 1)',
+                'rgba(76, 175, 80, 1)'
+              ],
+              borderWidth: 1
+            }]
+          };
+          
+          // Chart configuration options
+          const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  font: {
+                    size: 11
+                  },
+                  padding: 10,
+                  boxWidth: 12
+                }
+              },
+              tooltip: {
+                backgroundColor: 'rgba(20, 20, 30, 0.9)',
+                titleColor: '#fff',
+                bodyColor: '#fff',
+                padding: 8
+              }
+            }
+          };
+          
+          // Make sure Chart is available
+          if (typeof Chart === 'undefined') {
+            console.error("Chart.js is not loaded");
+            return;
+          }
+          
+          // Create the chart and store reference globally
+          window.petDistributionChart = new Chart(canvas, {
+            type: 'pie',
+            data: chartData,
+            options: chartOptions
+          });
+          
+          // Store reference in component as well
+          petDistributionChart = window.petDistributionChart;
+          
+          // Trigger an immediate update with current data
+          if (this.filteredData && this.filteredData.length > 0) {
+            const dogCount = this.filteredData.filter(item => item.petType === 'dog').length;
+            const catCount = this.filteredData.filter(item => item.petType === 'cat').length;
+            const otherCount = this.filteredData.filter(item => item.petType === 'both' || item.petType === 'unknown').length;
+            
+            if (window.petDistributionChart && 
+                window.petDistributionChart.data && 
+                window.petDistributionChart.data.datasets && 
+                window.petDistributionChart.data.datasets.length > 0) {
+              window.petDistributionChart.data.datasets[0].data = [dogCount, catCount, otherCount];
+              window.petDistributionChart.update();
+            }
+          }
+        } catch (error) {
+          console.error("Error creating pet distribution chart:", error);
+        }
+      },      
       updateTranscriptsTable() {
         const tableBody = document.getElementById('petsTableBody');
         if (!tableBody) return;
@@ -1280,7 +1392,12 @@ function initializeAnalytics() {
         return 'Unknown';
       },
       
-const isPuppyKitten = puppyKittenKeywords.some(keyword => text.toLowerCase().includes(keyword));
+      detectLifeStage(text) {
+        const puppyKittenKeywords = ['puppy', 'kitten', 'young', 'baby', 'newborn', 'month old', 'weeks old'];
+        const adultKeywords = ['adult', 'year old', 'mature'];
+        const seniorKeywords = ['senior', 'older', 'elderly', 'aging', 'geriatric', 'old dog', 'old cat'];
+        
+        const isPuppyKitten = puppyKittenKeywords.some(keyword => text.toLowerCase().includes(keyword));
         const isSenior = seniorKeywords.some(keyword => text.toLowerCase().includes(keyword));
         const isAdult = adultKeywords.some(keyword => text.toLowerCase().includes(keyword));
         
@@ -1290,3 +1407,97 @@ const isPuppyKitten = puppyKittenKeywords.some(keyword => text.toLowerCase().inc
         
         return 'unknown';
       },
+      
+      assessKnowledgeLevel(text) {
+        const lowKnowledgePatterns = [
+          /I don't know/i,
+          /not sure/i,
+          /confused about/i,
+          /what should I/i,
+          /is it okay to/i,
+          /first-time/i,
+          /never had a/i,
+          /how do I/i
+        ];
+        
+        const highKnowledgePatterns = [
+          /I've researched/i,
+          /I read that/i,
+          /according to/i,
+          /I understand that/i,
+          /I know that/i,
+          /I've been feeding/i,
+          /I've been giving/i,
+          /the vet recommended/i,
+          /I've had pets for/i
+        ];
+        
+        const lowMatches = lowKnowledgePatterns.filter(pattern => pattern.test(text)).length;
+        const highMatches = highKnowledgePatterns.filter(pattern => pattern.test(text)).length;
+        
+        const score = highMatches - lowMatches;
+        
+        if (score >= 2) return 'high';
+        if (score <= -2) return 'low';
+        return 'medium';
+      },
+      
+      extractKeyIssues(text) {
+        const issueCategories = {
+          diet: ['food', 'feed', 'diet', 'eating', 'nutrition', 'meal', 'appetite'],
+          health: ['sick', 'pain', 'hurt', 'vet', 'medicine', 'symptoms', 'treatment', 'disease', 'condition'],
+          behavior: ['behavior', 'training', 'aggressive', 'anxiety', 'scared', 'barking', 'biting', 'chewing'],
+          grooming: ['groom', 'bath', 'fur', 'hair', 'brush', 'nail', 'coat', 'shedding']
+        };
+        
+        const issues = [];
+        
+        for (const [category, keywords] of Object.entries(issueCategories)) {
+          for (const keyword of keywords) {
+            if (text.toLowerCase().includes(keyword)) {
+              issues.push(category);
+              break;
+            }
+          }
+        }
+        
+        return issues.length > 0 ? issues.join(', ') : 'general';
+      },
+      
+      detectCustomerCategory(text) {
+        const foodKeywords = ['food', 'diet', 'feeding', 'nutrition', 'meal', 'kibble', 'wet food', 'dry food', 'treats'];
+        const pharmacyKeywords = ['medicine', 'medication', 'prescription', 'tablets', 'pills', 'treatment', 'therapy'];
+        
+        const foodScore = foodKeywords.reduce((score, keyword) => {
+          return score + (text.toLowerCase().match(new RegExp(`\\b${keyword}\\b`, 'g')) || []).length;
+        }, 0);
+        
+        const pharmacyScore = pharmacyKeywords.reduce((score, keyword) => {
+          return score + (text.toLowerCase().match(new RegExp(`\\b${keyword}\\b`, 'g')) || []).length;
+        }, 0);
+        
+        if (foodScore > pharmacyScore) return 'food';
+        if (pharmacyScore > foodScore) return 'pharmacy';
+        return 'both';
+      },
+      
+      detectClinicPitch(text) {
+        const clinicKeywords = [
+          'vet visit', 'veterinary clinic', 'check-up', 'examination', 
+          'schedule an appointment', 'visit the vet', 'bring in your pet',
+          'veterinary care', 'clinic', 'veterinarian'
+        ];
+        
+        return clinicKeywords.some(keyword => text.toLowerCase().includes(keyword));
+      }
+    }
+  }).mount('#analytics-view');
+  
+  window.analyticsApp = analyticsApp;
+}
+
+function updateAnalytics() {
+  if (window.analyticsApp) {
+    window.analyticsApp.updateAnalytics();
+  }
+}
