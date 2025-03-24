@@ -728,12 +728,15 @@
     color: var(--text-muted);
   }
   
-  .pet-distribution-chart {
+.pet-distribution-chart {
     flex: 1;
     min-width: 200px;
     background-color: rgba(255, 255, 255, 0.03);
     border-radius: 6px;
     padding: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
   
   .chart-canvas-container {
@@ -1163,5 +1166,92 @@
     .insight-tab {
       font-size: 0.65rem;
       padding: 5px;
+    }
+  }
+
+  /* Specific styles to ensure chart containers display properly */
+.pet-distribution-chart {
+    flex: 1;
+    min-width: 200px;
+    background-color: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  #petDistributionChart {
+    height: 180px;
+    width: 100%;
+    max-width: 250px;
+    margin: 0 auto;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .pet-chart-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .chart-canvas-container {
+    height: 180px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+  }
+  
+  /* Pet parent summary container */
+  .pet-parent-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+  }
+  
+  /* Make sure stats container adjusts properly */
+  .stats-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex: 1;
+    min-width: 200px;
+    max-width: 600px;
+    justify-content: space-between;
+  }
+  
+  /* Additional responsive tweaks */
+  @media (max-width: 768px) {
+    .pet-parent-summary {
+      flex-direction: column;
+    }
+    
+    .pet-distribution-chart {
+      width: 100%;
+      min-width: 100%;
+    }
+    
+    #petDistributionChart {
+      height: 220px;
+    }
+    
+    .stats-container {
+      width: 100%;
+      max-width: 100%;
+      justify-content: space-between;
+    }
+  }
+  
+  /* Fix for the stat cards on small screens */
+  @media (max-width: 480px) {
+    .stat-card {
+      min-width: 45%;
+      max-width: 47%;
+      padding: 8px 4px;
     }
   }
