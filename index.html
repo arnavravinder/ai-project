@@ -9,7 +9,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" type="image/x-icon" href="/assets/favicon.svg">
-
 </head>
 <body id="app">
   <header>
@@ -17,10 +16,14 @@
       <i class="fas fa-robot fa-lg" style="color: var(--primary);"></i>
       <h1>SupertailsAI</h1>
     </div>
+    <div class="view-toggle-container">
+      <button class="view-toggle-btn active" data-view="chat">Chat View</button>
+      <button class="view-toggle-btn" data-view="analytics">Analytics</button>
+    </div>
   </header>
 
   <main>
-    <div class="container">
+    <div id="main-chat-view" class="container">
       <div class="card" data-aos="fade-up">
         <div id="upload-section">
           <div class="upload-container" id="dropArea">
@@ -35,7 +38,7 @@
               <i class="fas fa-upload"></i> Choose File
             </label>
             <input type="file" id="fileInput" class="file-input" accept=".txt,.doc,.docx,.pdf,.mp3">
-            <!-- Language selection dropdown -->
+            
             <div class="language-select">
               <label for="languageSelect">Language Spoken:</label>
               <select id="languageSelect">
@@ -46,10 +49,25 @@
             </div>
             <div id="fileName" class="file-name"></div>
             <div id="fileFeedback" class="file-feedback"></div>
+            
+            <div id="transcriptOptions" class="transcript-options">
+              <div id="audioContainer" class="audio-container">
+                <audio id="audioPlayer" controls></audio>
+              </div>
+              <textarea id="transcriptInput" class="transcript-input" placeholder="Paste transcript here if available..."></textarea>
+              <div class="button-row">
+                <button id="processWithTranscriptBtn" class="btn">
+                  <i class="fas fa-check"></i> Process with Transcript
+                </button>
+                <button id="processWithoutTranscriptBtn" class="btn btn-outline">
+                  <i class="fas fa-microphone"></i> No Transcript Available
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div id="loading-section" class="loading-container" style="display: none;">
+        <div id="loading-section" class="loading-container">
           <div class="loader"></div>
           <div class="loader-text">Processing your transcript...</div>
           <p>This might take a moment. We're analyzing your transcript to provide the best experience.</p>
@@ -66,7 +84,7 @@
             </button>
           </div>
           
-          <div class="chat-body" id="chatMessages">
+          <div id="chatMessages" class="chat-body">
             <div class="message">
               <div class="avatar bot-avatar">
                 <i class="fas fa-robot"></i>
@@ -78,11 +96,182 @@
           </div>
           
           <div class="chat-footer">
+            <div id="specialPromptButtons" class="special-prompt-buttons"></div>
             <i class="fas fa-question-circle chat-input-icon"></i>
             <input type="text" class="chat-input" id="userInput" placeholder="Ask about your transcript...">
             <button class="chat-submit" id="sendMessage">
               <i class="fas fa-paper-plane"></i>
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="analytics-view" class="container">
+      <div class="card" data-aos="fade-up">
+        <h2>Pet Parent Analytics</h2>
+        
+        <div class="analytics-controls">
+          <div class="analytics-filters">
+            <div class="filter-group">
+              <label for="filterSpecies">Filter by Species:</label>
+              <select id="filterSpecies" class="filter-select">
+                <option value="all">All Pets</option>
+                <option value="dog">Dogs</option>
+                <option value="cat">Cats</option>
+                <option value="other">Other Pets</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label for="filterLifeStage">Filter by Life Stage:</label>
+              <select id="filterLifeStage" class="filter-select">
+                <option value="all">All Stages</option>
+                <option value="puppy">Puppy/Kitten</option>
+                <option value="adult">Adult</option>
+                <option value="senior">Senior</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label for="filterCategory">Filter by Category:</label>
+              <select id="filterCategory" class="filter-select">
+                <option value="all">All Categories</option>
+                <option value="food">Food Customers</option>
+                <option value="pharmacy">Pharmacy Customers</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="analytics-upload">
+            <h3>Upload Additional Transcripts</h3>
+            <div class="upload-container mini-upload" id="analyticsDropArea">
+              <div class="upload-icon">
+                <i class="fas fa-file-alt"></i>
+              </div>
+              <label for="analyticsFileInput" class="btn">
+                <i class="fas fa-upload"></i> Choose Files
+              </label>
+              <input type="file" id="analyticsFileInput" class="file-input" accept=".txt,.doc,.docx,.pdf,.mp3" multiple>
+            </div>
+            <div id="analyticsFileList" class="file-list"></div>
+            <div id="analyticsFeedback" class="file-feedback"></div>
+          </div>
+        </div>
+        
+        <div class="analytics-dashboard">
+          <div class="stats-container">
+            <div class="stat-card">
+              <div class="stat-icon"><i class="fas fa-paw"></i></div>
+              <div id="totalTranscripts" class="stat-value">0</div>
+              <div class="stat-label">Total Transcripts</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon"><i class="fas fa-dog"></i></div>
+              <div id="dogOwners" class="stat-value">0</div>
+              <div class="stat-label">Dog Owners</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon"><i class="fas fa-cat"></i></div>
+              <div id="catOwners" class="stat-value">0</div>
+              <div class="stat-label">Cat Owners</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon"><i class="fas fa-clinic-medical"></i></div>
+              <div id="clinicPitches" class="stat-value">0</div>
+              <div class="stat-label">Clinic Pitches</div>
+            </div>
+          </div>
+          
+          <div class="analytics-sections">
+            <div class="analytics-section">
+              <h3>Pet Parent Knowledge Levels</h3>
+              <div class="chart-container">
+                <div class="chart-bar high">
+                  <div id="highKnowledgeBar" class="chart-fill"></div>
+                  <div class="chart-label">High Knowledge</div>
+                  <div id="highKnowledgeValue" class="chart-value">0</div>
+                </div>
+                <div class="chart-bar medium">
+                  <div id="mediumKnowledgeBar" class="chart-fill"></div>
+                  <div class="chart-label">Medium Knowledge</div>
+                  <div id="mediumKnowledgeValue" class="chart-value">0</div>
+                </div>
+                <div class="chart-bar low">
+                  <div id="lowKnowledgeBar" class="chart-fill"></div>
+                  <div class="chart-label">Low Knowledge</div>
+                  <div id="lowKnowledgeValue" class="chart-value">0</div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="analytics-section">
+              <h3>Key Questions Analysis</h3>
+              <div id="keyQuestionsChart" class="key-questions-chart"></div>
+            </div>
+          </div>
+          
+          <div class="analytics-section full-width">
+            <h3>Transcript Analysis</h3>
+            <div class="transcript-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pet Parent</th>
+                    <th>Pet Type</th>
+                    <th>Pet Name</th>
+                    <th>Life Stage</th>
+                    <th>Knowledge Level</th>
+                    <th>Key Issues</th>
+                    <th>Category</th>
+                    <th>Clinic Pitched</th>
+                  </tr>
+                </thead>
+                <tbody id="petsTableBody">
+                  <tr>
+                    <td colspan="8" class="empty-table">No transcripts analyzed yet</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          <div class="analytics-section full-width">
+            <h3>Key Insights</h3>
+            <div class="insights-container">
+              <div class="insight-tabs">
+                <button class="insight-tab active" data-tab="commonQuestions">Common Questions</button>
+                <button class="insight-tab" data-tab="customerDifferences">Food vs Pharmacy</button>
+                <button class="insight-tab" data-tab="excitementFactors">Excitement Factors</button>
+                <button class="insight-tab" data-tab="effectivePitches">Effective Pitches</button>
+                <button class="insight-tab" data-tab="lifeStageInsights">Life Stage Insights</button>
+                <button class="insight-tab" data-tab="clinicOpportunities">Clinic Opportunities</button>
+              </div>
+              <div class="insight-content">
+                <div id="commonQuestions" class="insight-panel active">
+                  <h4>Common Questions from Pet Parents</h4>
+                  <div id="commonQuestionsContent" class="insight-data"></div>
+                </div>
+                <div id="customerDifferences" class="insight-panel">
+                  <h4>Differences Between Food & Pharmacy Customers</h4>
+                  <div id="customerDifferencesContent" class="insight-data"></div>
+                </div>
+                <div id="excitementFactors" class="insight-panel">
+                  <h4>Pet Parent Excitement Factors</h4>
+                  <div id="excitementFactorsContent" class="insight-data"></div>
+                </div>
+                <div id="effectivePitches" class="insight-panel">
+                  <h4>Effective Vet Pitches by Life Stage/Species</h4>
+                  <div id="effectivePitchesContent" class="insight-data"></div>
+                </div>
+                <div id="lifeStageInsights" class="insight-panel">
+                  <h4>Key Insights by Life Stage</h4>
+                  <div id="lifeStageInsightsContent" class="insight-data"></div>
+                </div>
+                <div id="clinicOpportunities" class="insight-panel">
+                  <h4>Clinic Pitches & Missed Opportunities</h4>
+                  <div id="clinicOpportunitiesContent" class="insight-data"></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -95,6 +284,11 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-app.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-database.min.js"></script>
+  <script src="config.js"></script>
   <script src="script.js"></script>
+  <script src="analytics.js"></script>
 </body>
 </html>
