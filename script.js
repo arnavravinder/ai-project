@@ -103,7 +103,7 @@ const app = Vue.createApp({
       }
     },
     
-    setupDropArea(dropArea, fileInput) {
+    setupDropArea(dropArea) {
       dropArea.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropArea.style.borderColor = 'var(--primary)';
@@ -248,7 +248,6 @@ const app = Vue.createApp({
           this.processTranscript();
         })
         .catch(error => {
-          console.error("Error transcribing audio:", error);
           this.showFileFeedback('error', 'Error transcribing audio. Using default transcript.');
           this.currentTranscript = this.defaultTranscript;
           if (loader) loader.style.display = 'none';
@@ -269,7 +268,7 @@ const app = Vue.createApp({
         this.elements.loadingSection.style.display = 'none';
         this.elements.chatSection.style.display = 'flex';
         this.scrollChatToBottom();
-      }, 1500);
+      }, 1000);
     },
     
     analyzeTranscriptData() {
@@ -287,13 +286,11 @@ const app = Vue.createApp({
         timestamp: new Date().toISOString()
       };
       
-      // Only try to save to database if it's available
       try {
         if (window.db) {
           this.saveTranscriptToDatabase(this.transcriptData);
         }
       } catch (error) {
-        console.warn("Could not save to database:", error);
       }
     },
     
@@ -324,7 +321,10 @@ const app = Vue.createApp({
       const namePatterns = [
         /my (dog|cat|pet)(?:'s| is| named)? (\w+)/i,
         /(\w+) is my (dog|cat|pet)/i,
-        /I have a (dog|cat|pet) named (\w+)/i
+        /I have a (dog|cat|pet) named (\w+)/i,
+        /our (dog|cat|pet)(?:'s| is| named)? (\w+)/i,
+        /(\w+) has been (having|experiencing)/i,
+        /about (\w+), (he|she|it|they) (is|are|has|have)/i
       ];
       
       for (const pattern of namePatterns) {
@@ -335,6 +335,15 @@ const app = Vue.createApp({
           } else {
             return match[1];
           }
+        }
+      }
+      
+      const words = text.split(/\s+/);
+      for (let i = 0; i < words.length; i++) {
+        const word = words[i];
+        if (word.length >= 3 && word.length <= 12 && /^[A-Z][a-z]+$/.test(word) && 
+            !['The', 'And', 'But', 'For', 'With', 'About'].includes(word)) {
+          return word;
         }
       }
       
@@ -445,13 +454,9 @@ const app = Vue.createApp({
         if (window.db) {
           const transcriptsRef = window.db.ref('transcripts');
           const newTranscriptRef = transcriptsRef.push();
-          newTranscriptRef.set(transcriptData)
-            .catch(error => console.error('Error saving transcript to database:', error));
-        } else {
-          console.warn("Database not available for saving transcript");
+          newTranscriptRef.set(transcriptData);
         }
       } catch (error) {
-        console.error("Error in saveTranscriptToDatabase:", error);
       }
     },
     
@@ -590,12 +595,6 @@ const app = Vue.createApp({
       const typingIndicator = document.getElementById('typingIndicator');
       if (typingIndicator) {
         typingIndicator.remove();
-      }
-    },
-    
-    scrollChatToBottom() {
-      if (this.elements.chatMessages) {
-        this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
       }
     },
     
@@ -741,6 +740,4 @@ Answer the question based ONLY on information found in the transcript. If you ca
       this.sendToGeminiAPI(promptText, this.currentTranscript, true);
     }
   }
-});
-
-app.mount('#app');
+}).mount('#app');

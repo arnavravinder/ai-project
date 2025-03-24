@@ -1,13 +1,12 @@
-let analyticsData = null;
+let analyticsData = [];
 let questionChart = null;
+let petDistributionChart = null;
 let filteredData = [];
 let analyticsApp = null;
+let selectedTranscript = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Wait a moment for Firebase to initialize
-  setTimeout(() => {
-    initializeAnalytics();
-  }, 500);
+  setTimeout(initializeAnalytics, 500);
 });
 
 function initializeAnalytics() {
@@ -19,7 +18,7 @@ function initializeAnalytics() {
         loading: true,
         filters: {
           species: 'all',
-          lifeStage: 'all',
+          lifeStage: 'all', 
           category: 'all'
         },
         stats: {
@@ -33,17 +32,24 @@ function initializeAnalytics() {
           medium: 0,
           low: 0
         },
-        activeInsightTab: 'commonQuestions'
+        activeInsightTab: 'commonQuestions',
+        sampleQuestions: [
+          {pattern: 'feeding frequency', category: 'Feeding Frequency', example: 'How often should I feed my pet?'},
+          {pattern: 'food recommendations', category: 'Food Recommendations', example: 'What brand of food is best for my pet?'},
+          {pattern: 'normal behavior', category: 'Normal Behavior', example: 'Is it normal for my pet to do this?'},
+          {pattern: 'training help', category: 'Training', example: 'How do I train my pet to do this?'},
+          {pattern: 'health symptoms', category: 'Health Symptoms', example: 'What are the symptoms of this condition?'},
+          {pattern: 'care frequency', category: 'General Care', example: 'How often should I groom my pet?'},
+          {pattern: 'vet visits', category: 'Vet Visits', example: 'When should I take my pet to the vet?'},
+          {pattern: 'safety concerns', category: 'Safety Concerns', example: 'Is this safe for my pet?'}
+        ]
       };
     },
     
     mounted() {
       this.setupEventListeners();
       this.initializeCharts();
-      // Wait for db to be available
-      setTimeout(() => {
-        this.fetchAnalyticsData();
-      }, 500);
+      setTimeout(this.fetchAnalyticsData, 800);
     },
     
     methods: {
@@ -101,6 +107,38 @@ function initializeAnalytics() {
             });
           });
         });
+        
+        const showAllTranscripts = document.getElementById('showAllTranscripts');
+        const viewDetailedTranscript = document.getElementById('viewDetailedTranscript');
+        const backToList = document.getElementById('backToList');
+        const transcriptTable = document.getElementById('transcriptTable');
+        const transcriptDetail = document.getElementById('transcriptDetail');
+        
+        if (showAllTranscripts && viewDetailedTranscript && backToList) {
+          showAllTranscripts.addEventListener('click', () => {
+            showAllTranscripts.classList.add('active');
+            viewDetailedTranscript.classList.remove('active');
+            transcriptTable.style.display = 'block';
+            transcriptDetail.style.display = 'none';
+          });
+          
+          viewDetailedTranscript.addEventListener('click', () => {
+            if (selectedTranscript) {
+              showAllTranscripts.classList.remove('active');
+              viewDetailedTranscript.classList.add('active');
+              transcriptTable.style.display = 'none';
+              transcriptDetail.style.display = 'block';
+              this.displayTranscriptDetail(selectedTranscript);
+            }
+          });
+          
+          backToList.addEventListener('click', () => {
+            showAllTranscripts.classList.add('active');
+            viewDetailedTranscript.classList.remove('active');
+            transcriptTable.style.display = 'block';
+            transcriptDetail.style.display = 'none';
+          });
+        }
       },
       
       setupDropArea(dropArea) {
@@ -130,37 +168,30 @@ function initializeAnalytics() {
       initializeCharts() {
         try {
           this.initKeyQuestionsChart();
+          this.initPetDistributionChart();
         } catch (error) {
-          console.error("Error initializing charts:", error);
         }
       },
       
       initKeyQuestionsChart() {
         const ctx = document.getElementById('keyQuestionsChart');
-        if (!ctx) {
-          console.error("Chart container not found");
-          return;
-        }
+        if (!ctx) return;
         
         try {
-          // Check if there's already a chart
           if (window.questionChart) {
             window.questionChart.destroy();
           }
           
-          // Create an HTML canvas element
           const canvas = document.createElement('canvas');
           canvas.id = 'keyQuestionsChartCanvas';
-          canvas.width = 400;
-          canvas.height = 250;
+          canvas.height = 170;
           ctx.innerHTML = '';
           ctx.appendChild(canvas);
           
-          // Create the chart
           window.questionChart = new Chart(canvas, {
             type: 'bar',
             data: {
-              labels: ['Vet Questions', 'Diet Questions', 'Behavior Questions', 'Health Questions', 'Grooming Questions'],
+              labels: ['Vet', 'Diet', 'Behavior', 'Health', 'Grooming'],
               datasets: [{
                 label: 'Frequency',
                 data: [0, 0, 0, 0, 0],
@@ -184,7 +215,7 @@ function initializeAnalytics() {
                   backgroundColor: 'rgba(20, 20, 30, 0.9)',
                   titleColor: '#fff',
                   bodyColor: '#fff',
-                  padding: 12
+                  padding: 8
                 }
               },
               scales: {
@@ -194,7 +225,10 @@ function initializeAnalytics() {
                     color: 'rgba(255, 255, 255, 0.05)'
                   },
                   ticks: {
-                    color: 'rgba(255, 255, 255, 0.7)'
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    font: {
+                      size: 10
+                    }
                   }
                 },
                 x: {
@@ -202,7 +236,10 @@ function initializeAnalytics() {
                     display: false
                   },
                   ticks: {
-                    color: 'rgba(255, 255, 255, 0.7)'
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    font: {
+                      size: 10
+                    }
                   }
                 }
               }
@@ -211,22 +248,76 @@ function initializeAnalytics() {
           
           questionChart = window.questionChart;
         } catch (error) {
-          console.error("Error creating chart:", error);
+        }
+      },
+      
+      initPetDistributionChart() {
+        const ctx = document.getElementById('petDistributionChart');
+        if (!ctx) return;
+        
+        try {
+          if (window.petDistributionChart) {
+            window.petDistributionChart.destroy();
+          }
+          
+          const canvas = document.createElement('canvas');
+          canvas.id = 'petDistributionChartCanvas';
+          canvas.height = 170;
+          ctx.innerHTML = '';
+          ctx.appendChild(canvas);
+          
+          window.petDistributionChart = new Chart(canvas, {
+            type: 'pie',
+            data: {
+              labels: ['Dogs', 'Cats', 'Both/Other'],
+              datasets: [{
+                data: [0, 0, 0],
+                backgroundColor: [
+                  'rgba(64, 185, 255, 0.7)',
+                  'rgba(140, 82, 255, 0.7)',
+                  'rgba(76, 175, 80, 0.7)'
+                ],
+                borderColor: [
+                  'rgba(64, 185, 255, 1)',
+                  'rgba(140, 82, 255, 1)',
+                  'rgba(76, 175, 80, 1)'
+                ],
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: 'bottom',
+                  labels: {
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    font: {
+                      size: 11
+                    },
+                    padding: 10
+                  }
+                }
+              }
+            }
+          });
+          
+          petDistributionChart = window.petDistributionChart;
+        } catch (error) {
         }
       },
       
       fetchAnalyticsData() {
         this.loading = true;
         
-        if (!window.db) {
-          console.error("Firebase database not initialized yet");
-          // Load sample data instead
-          this.loadSampleData();
-          this.loading = false;
-          return;
-        }
-        
         try {
+          if (!window.db) {
+            this.loadSampleData();
+            this.loading = false;
+            return;
+          }
+          
           const transcriptsRef = window.db.ref('transcripts');
           transcriptsRef.on('value', (snapshot) => {
             const data = snapshot.val();
@@ -236,21 +327,18 @@ function initializeAnalytics() {
               this.filteredData = [...this.analyticsData];
               this.updateAnalytics();
             } else {
-              // Load sample data if no data in the database
               this.loadSampleData();
             }
             
             this.loading = false;
           });
         } catch (error) {
-          console.error("Error fetching analytics data:", error);
           this.loadSampleData();
           this.loading = false;
         }
       },
       
       loadSampleData() {
-        // Sample data for demonstration
         const sampleData = [
           {
             text: "My dog Max is having some issues with his diet. He's about 3 years old and I've been feeding him regular kibble, but he seems to have less energy lately. The vet recommended a higher protein diet. Should I switch brands?",
@@ -374,7 +462,6 @@ function initializeAnalytics() {
             this.analyzeTranscriptForAnalytics(transcriptText, file.name, fileItem, callback);
           })
           .catch(error => {
-            console.error("Error transcribing audio:", error);
             statusSpan.textContent = 'Error';
             statusSpan.style.color = 'var(--danger)';
             callback();
@@ -405,7 +492,6 @@ function initializeAnalytics() {
       analyzeTranscriptForAnalytics(transcriptText, fileName, fileItem, callback) {
         const statusSpan = fileItem.querySelector('.file-item-status');
         
-        // Simple transcript analysis
         const petType = this.detectPetType(transcriptText);
         const petName = this.extractPetName(transcriptText);
         const lifeStage = this.detectLifeStage(transcriptText);
@@ -429,8 +515,8 @@ function initializeAnalytics() {
         
         statusSpan.textContent = 'Saving...';
         
-        if (window.db) {
-          try {
+        try {
+          if (window.db) {
             const transcriptsRef = window.db.ref('transcripts');
             const newTranscriptRef = transcriptsRef.push();
             
@@ -441,25 +527,30 @@ function initializeAnalytics() {
                 callback();
               })
               .catch(error => {
-                console.error("Error saving to Firebase:", error);
-                statusSpan.textContent = 'Error';
-                statusSpan.style.color = 'var(--danger)';
+                this.analyticsData.push(transcriptData);
+                this.filteredData = [...this.analyticsData];
+                this.updateAnalytics();
+                
+                statusSpan.textContent = 'Saved locally';
+                statusSpan.style.color = 'var(--warning)';
                 callback();
               });
-          } catch (error) {
-            console.error("Error with Firebase reference:", error);
-            statusSpan.textContent = 'Error';
-            statusSpan.style.color = 'var(--danger)';
+          } else {
+            this.analyticsData.push(transcriptData);
+            this.filteredData = [...this.analyticsData];
+            this.updateAnalytics();
+            
+            statusSpan.textContent = 'Saved locally';
+            statusSpan.style.color = 'var(--success)';
             callback();
           }
-        } else {
-          // Add to local analytics data if no database
+        } catch (error) {
           this.analyticsData.push(transcriptData);
           this.filteredData = [...this.analyticsData];
           this.updateAnalytics();
           
-          statusSpan.textContent = 'Completed (Local)';
-          statusSpan.style.color = 'var(--success)';
+          statusSpan.textContent = 'Saved locally';
+          statusSpan.style.color = 'var(--warning)';
           callback();
         }
       },
@@ -484,6 +575,7 @@ function initializeAnalytics() {
         this.updateBasicStats();
         this.updateKnowledgeChart();
         this.updateQuestionsChart();
+        this.updatePetDistributionChart();
         this.updateTranscriptsTable();
         this.updateInsights();
       },
@@ -547,12 +639,10 @@ function initializeAnalytics() {
       
       updateQuestionsChart() {
         if (!window.questionChart) {
-          console.warn("Chart not initialized, trying to initialize");
           this.initKeyQuestionsChart();
           if (!window.questionChart) return;
         }
         
-        // Calculate question types
         const questionTypes = {
           vet: 0,
           diet: 0,
@@ -596,7 +686,23 @@ function initializeAnalytics() {
           
           window.questionChart.update();
         } catch (error) {
-          console.error("Error updating chart:", error);
+        }
+      },
+      
+      updatePetDistributionChart() {
+        if (!window.petDistributionChart) {
+          this.initPetDistributionChart();
+          if (!window.petDistributionChart) return;
+        }
+        
+        const dogCount = this.filteredData.filter(item => item.petType === 'dog').length;
+        const catCount = this.filteredData.filter(item => item.petType === 'cat').length;
+        const otherCount = this.filteredData.filter(item => item.petType === 'both' || item.petType === 'unknown').length;
+        
+        try {
+          window.petDistributionChart.data.datasets[0].data = [dogCount, catCount, otherCount];
+          window.petDistributionChart.update();
+        } catch (error) {
         }
       },
       
@@ -610,23 +716,22 @@ function initializeAnalytics() {
           const emptyRow = document.createElement('tr');
           const emptyCell = document.createElement('td');
           emptyCell.className = 'empty-table';
-          emptyCell.colSpan = 8;
+          emptyCell.colSpan = 9;
           emptyCell.textContent = 'No transcripts available';
           emptyRow.appendChild(emptyCell);
           tableBody.appendChild(emptyRow);
           return;
         }
         
-        // Sort by timestamp descending
         const sortedData = [...this.filteredData].sort((a, b) => {
           return new Date(b.timestamp) - new Date(a.timestamp);
         });
         
-        sortedData.forEach(item => {
+        sortedData.forEach((item, index) => {
           const row = document.createElement('tr');
           
           const petParentCell = document.createElement('td');
-          petParentCell.textContent = 'Pet Parent'; // Placeholder since we don't have this info
+          petParentCell.textContent = 'Pet Parent';
           
           const petTypeCell = document.createElement('td');
           petTypeCell.textContent = item.petType.charAt(0).toUpperCase() + item.petType.slice(1);
@@ -650,6 +755,21 @@ function initializeAnalytics() {
           const clinicPitchedCell = document.createElement('td');
           clinicPitchedCell.textContent = item.clinicPitched ? 'Yes' : 'No';
           
+          const actionsCell = document.createElement('td');
+          const viewButton = document.createElement('button');
+          viewButton.className = 'btn btn-sm';
+          viewButton.innerHTML = '<i class="fas fa-eye"></i>';
+          viewButton.title = 'View Details';
+          viewButton.addEventListener('click', () => {
+            selectedTranscript = item;
+            document.getElementById('showAllTranscripts').classList.remove('active');
+            document.getElementById('viewDetailedTranscript').classList.add('active');
+            document.getElementById('transcriptTable').style.display = 'none';
+            document.getElementById('transcriptDetail').style.display = 'block';
+            this.displayTranscriptDetail(item);
+          });
+          actionsCell.appendChild(viewButton);
+          
           row.appendChild(petParentCell);
           row.appendChild(petTypeCell);
           row.appendChild(petNameCell);
@@ -658,9 +778,49 @@ function initializeAnalytics() {
           row.appendChild(keyIssuesCell);
           row.appendChild(categoryCell);
           row.appendChild(clinicPitchedCell);
+          row.appendChild(actionsCell);
           
           tableBody.appendChild(row);
         });
+      },
+      
+      displayTranscriptDetail(transcript) {
+        const detailContent = document.getElementById('detailContent');
+        if (!detailContent) return;
+        
+        const petName = transcript.petName || 'Unknown';
+        document.getElementById('detailTitle').textContent = `Transcript Details: ${petName}`;
+        
+        let detailHTML = `
+          <div class="detail-item">
+            <span class="detail-label">Pet Name:</span> ${transcript.petName}
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Pet Type:</span> ${transcript.petType.charAt(0).toUpperCase() + transcript.petType.slice(1)}
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Life Stage:</span> ${transcript.lifeStage.charAt(0).toUpperCase() + transcript.lifeStage.slice(1)}
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Knowledge Level:</span> 
+            <span class="knowledge-${transcript.knowledgeLevel}">${transcript.knowledgeLevel.charAt(0).toUpperCase() + transcript.knowledgeLevel.slice(1)}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Key Issues:</span> ${transcript.keyIssues}
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Customer Category:</span> ${transcript.customerCategory.charAt(0).toUpperCase() + transcript.customerCategory.slice(1)}
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Clinic Pitched:</span> ${transcript.clinicPitched ? 'Yes' : 'No'}
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Transcript Text:</div>
+            <div class="detail-text">${transcript.text}</div>
+          </div>
+        `;
+        
+        detailContent.innerHTML = detailHTML;
       },
       
       updateInsights() {
@@ -701,7 +861,6 @@ function initializeAnalytics() {
           });
         });
         
-        // Sort by frequency
         const sortedQuestions = Object.entries(questionCounts)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 6);
@@ -715,7 +874,20 @@ function initializeAnalytics() {
           });
           content += '</ol>';
         } else {
-          content = '<p>Not enough data to analyze common questions.</p>';
+          content = '<p class="sample-questions-note">Based on analysis, these would be common questions:</p><ol>';
+          
+          const sampleQuestions = [
+            {category: 'Feeding Frequency', example: 'How often should I feed my pet?'},
+            {category: 'Food Recommendations', example: 'What brand of food is best for my pet?'},
+            {category: 'Normal Behavior', example: 'Is it normal for my pet to do this?'},
+            {category: 'Training', example: 'How do I train my pet to do this?'}
+          ];
+          
+          sampleQuestions.forEach(({category, example}) => {
+            content += `<li><strong>${category}</strong>: <em>${example}</em></li>`;
+          });
+          
+          content += '</ol>';
         }
         
         commonQuestionsDiv.innerHTML = content;
@@ -812,7 +984,6 @@ function initializeAnalytics() {
         
         let content = '<div class="pitch-container">';
         
-        // Dog pitches
         content += '<div class="pitch-section"><h5>Effective Dog Pitches</h5>';
         content += '<ul>';
         
@@ -830,7 +1001,6 @@ function initializeAnalytics() {
         
         content += '</ul></div>';
         
-        // Cat pitches
         content += '<div class="pitch-section"><h5>Effective Cat Pitches</h5>';
         content += '<ul>';
         
@@ -973,7 +1143,6 @@ function initializeAnalytics() {
         const pitchPercentage = Math.round((clinicPitches.length / totalTranscripts) * 100) || 0;
         const missedPercentage = Math.round((missedOpportunities.length / totalTranscripts) * 100) || 0;
         
-        // Calculate potential opportunities
         const healthIssues = this.filteredData.filter(item => item.keyIssues.includes('health') && !item.clinicPitched);
         const seniorPets = this.filteredData.filter(item => item.lifeStage === 'senior' && !item.clinicPitched);
         const lowKnowledge = this.filteredData.filter(item => item.knowledgeLevel === 'low' && !item.clinicPitched);
@@ -1038,7 +1207,10 @@ function initializeAnalytics() {
         const namePatterns = [
           /my (dog|cat|pet)(?:'s| is| named)? (\w+)/i,
           /(\w+) is my (dog|cat|pet)/i,
-          /I have a (dog|cat|pet) named (\w+)/i
+          /I have a (dog|cat|pet) named (\w+)/i,
+          /our (dog|cat|pet)(?:'s| is| named)? (\w+)/i,
+          /(\w+) has been (having|experiencing)/i,
+          /about (\w+), (he|she|it|they) (is|are|has|have)/i
         ];
         
         for (const pattern of namePatterns) {
@@ -1049,6 +1221,15 @@ function initializeAnalytics() {
             } else {
               return match[1];
             }
+          }
+        }
+        
+        const words = text.split(/\s+/);
+        for (let i = 0; i < words.length; i++) {
+          const word = words[i];
+          if (word.length >= 3 && word.length <= 12 && /^[A-Z][a-z]+$/.test(word) && 
+              !['The', 'And', 'But', 'For', 'With', 'About'].includes(word)) {
+            return word;
           }
         }
         
@@ -1156,7 +1337,6 @@ function initializeAnalytics() {
     }
   }).mount('#analytics-view');
   
-  // Make the analytics app globally available
   window.analyticsApp = analyticsApp;
 }
 
