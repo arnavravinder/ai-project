@@ -51,6 +51,13 @@ const app = Vue.createApp({
       this.addSpecialPromptButtons();
     },
     
+    // Add the missing scrollChatToBottom function
+    scrollChatToBottom() {
+      if (this.elements.chatMessages) {
+        this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+      }
+    },
+    
     registerEventListeners() {
       const viewButtons = document.querySelectorAll('.view-toggle-btn');
       viewButtons.forEach(button => {
@@ -291,6 +298,7 @@ const app = Vue.createApp({
           this.saveTranscriptToDatabase(this.transcriptData);
         }
       } catch (error) {
+        // Silent catch
       }
     },
     
@@ -339,7 +347,7 @@ const app = Vue.createApp({
       }
       
       const words = text.split(/\s+/);
-      for (let i = 0; i < words.length; i++) {
+      for (let i =.0; i < words.length; i++) {
         const word = words[i];
         if (word.length >= 3 && word.length <= 12 && /^[A-Z][a-z]+$/.test(word) && 
             !['The', 'And', 'But', 'For', 'With', 'About'].includes(word)) {
@@ -457,6 +465,7 @@ const app = Vue.createApp({
           newTranscriptRef.set(transcriptData);
         }
       } catch (error) {
+        // Silent catch
       }
     },
     
@@ -713,6 +722,7 @@ Answer the question based ONLY on information found in the transcript. If you ca
         allButtons.forEach(btn => {
           btn.style.backgroundColor = 'var(--secondary)';
           btn.classList.remove('active-special-prompt');
+          btn.classList.remove('moving-border');
         });
         
         button.style.backgroundColor = 'rgba(140, 82, 255, 0.2)';
