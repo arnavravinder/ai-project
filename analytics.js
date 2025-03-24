@@ -4,7 +4,10 @@ let filteredData = [];
 let analyticsApp = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-  initializeAnalytics();
+  // Wait a moment for Firebase to initialize
+  setTimeout(() => {
+    initializeAnalytics();
+  }, 500);
 });
 
 function initializeAnalytics() {
@@ -37,7 +40,10 @@ function initializeAnalytics() {
     mounted() {
       this.setupEventListeners();
       this.initializeCharts();
-      this.fetchAnalyticsData();
+      // Wait for db to be available
+      setTimeout(() => {
+        this.fetchAnalyticsData();
+      }, 500);
     },
     
     methods: {
@@ -122,90 +128,168 @@ function initializeAnalytics() {
       },
       
       initializeCharts() {
-        this.initKeyQuestionsChart();
+        try {
+          this.initKeyQuestionsChart();
+        } catch (error) {
+          console.error("Error initializing charts:", error);
+        }
       },
       
       initKeyQuestionsChart() {
         const ctx = document.getElementById('keyQuestionsChart');
-        if (!ctx) return;
+        if (!ctx) {
+          console.error("Chart container not found");
+          return;
+        }
         
-        questionChart = new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: ['Vet Questions', 'Diet Questions', 'Behavior Questions', 'Health Questions', 'Grooming Questions'],
-            datasets: [{
-              label: 'Frequency',
-              data: [0, 0, 0, 0, 0],
-              backgroundColor: [
-                'rgba(140, 82, 255, 0.7)',
-                'rgba(64, 185, 255, 0.7)',
-                'rgba(76, 175, 80, 0.7)',
-                'rgba(255, 193, 7, 0.7)',
-                'rgba(244, 67, 54, 0.7)'
-              ]
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                display: false
-              },
-              tooltip: {
-                backgroundColor: 'rgba(20, 20, 30, 0.9)',
-                titleColor: '#fff',
-                bodyColor: '#fff',
-                padding: 12
-              }
+        try {
+          // Check if there's already a chart
+          if (window.questionChart) {
+            window.questionChart.destroy();
+          }
+          
+          // Create an HTML canvas element
+          const canvas = document.createElement('canvas');
+          canvas.id = 'keyQuestionsChartCanvas';
+          canvas.width = 400;
+          canvas.height = 250;
+          ctx.innerHTML = '';
+          ctx.appendChild(canvas);
+          
+          // Create the chart
+          window.questionChart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+              labels: ['Vet Questions', 'Diet Questions', 'Behavior Questions', 'Health Questions', 'Grooming Questions'],
+              datasets: [{
+                label: 'Frequency',
+                data: [0, 0, 0, 0, 0],
+                backgroundColor: [
+                  'rgba(140, 82, 255, 0.7)',
+                  'rgba(64, 185, 255, 0.7)',
+                  'rgba(76, 175, 80, 0.7)',
+                  'rgba(255, 193, 7, 0.7)',
+                  'rgba(244, 67, 54, 0.7)'
+                ]
+              }]
             },
-            scales: {
-              y: {
-                beginAtZero: true,
-                grid: {
-                  color: 'rgba(255, 255, 255, 0.05)'
-                },
-                ticks: {
-                  color: 'rgba(255, 255, 255, 0.7)'
-                }
-              },
-              x: {
-                grid: {
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
                   display: false
                 },
-                ticks: {
-                  color: 'rgba(255, 255, 255, 0.7)'
+                tooltip: {
+                  backgroundColor: 'rgba(20, 20, 30, 0.9)',
+                  titleColor: '#fff',
+                  bodyColor: '#fff',
+                  padding: 12
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  grid: {
+                    color: 'rgba(255, 255, 255, 0.05)'
+                  },
+                  ticks: {
+                    color: 'rgba(255, 255, 255, 0.7)'
+                  }
+                },
+                x: {
+                  grid: {
+                    display: false
+                  },
+                  ticks: {
+                    color: 'rgba(255, 255, 255, 0.7)'
+                  }
                 }
               }
             }
-          }
-        });
+          });
+          
+          questionChart = window.questionChart;
+        } catch (error) {
+          console.error("Error creating chart:", error);
+        }
       },
       
       fetchAnalyticsData() {
         this.loading = true;
         
-        if (!db) {
-          console.error("Firebase database not initialized");
+        if (!window.db) {
+          console.error("Firebase database not initialized yet");
+          // Load sample data instead
+          this.loadSampleData();
           this.loading = false;
           return;
         }
         
-        const transcriptsRef = db.ref('transcripts');
-        transcriptsRef.on('value', (snapshot) => {
-          const data = snapshot.val();
-          
-          if (data) {
-            this.analyticsData = Object.values(data);
-            this.filteredData = [...this.analyticsData];
-            this.updateAnalytics();
-          } else {
-            this.analyticsData = [];
-            this.filteredData = [];
-          }
-          
+        try {
+          const transcriptsRef = window.db.ref('transcripts');
+          transcriptsRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            
+            if (data) {
+              this.analyticsData = Object.values(data);
+              this.filteredData = [...this.analyticsData];
+              this.updateAnalytics();
+            } else {
+              // Load sample data if no data in the database
+              this.loadSampleData();
+            }
+            
+            this.loading = false;
+          });
+        } catch (error) {
+          console.error("Error fetching analytics data:", error);
+          this.loadSampleData();
           this.loading = false;
-        });
+        }
+      },
+      
+      loadSampleData() {
+        // Sample data for demonstration
+        const sampleData = [
+          {
+            text: "My dog Max is having some issues with his diet. He's about 3 years old and I've been feeding him regular kibble, but he seems to have less energy lately. The vet recommended a higher protein diet. Should I switch brands?",
+            petType: "dog",
+            petName: "Max",
+            lifeStage: "adult",
+            knowledgeLevel: "medium",
+            keyIssues: "diet, health",
+            customerCategory: "food",
+            clinicPitched: true,
+            timestamp: new Date().toISOString()
+          },
+          {
+            text: "I have a new kitten named Luna, she's just 3 months old. I'm a first-time cat owner and I'm not sure how often to feed her. Also, when should I schedule her next vaccination?",
+            petType: "cat",
+            petName: "Luna",
+            lifeStage: "puppy",
+            knowledgeLevel: "low",
+            keyIssues: "diet, health",
+            customerCategory: "food",
+            clinicPitched: false,
+            timestamp: new Date().toISOString()
+          },
+          {
+            text: "My senior dog Bailey needs medication for arthritis. I've been giving him the pills the vet prescribed but he's having trouble swallowing them. Is there a different form I can get?",
+            petType: "dog",
+            petName: "Bailey",
+            lifeStage: "senior",
+            knowledgeLevel: "high",
+            keyIssues: "health",
+            customerCategory: "pharmacy",
+            clinicPitched: true,
+            timestamp: new Date().toISOString()
+          }
+        ];
+        
+        this.analyticsData = sampleData;
+        this.filteredData = [...sampleData];
+        this.updateAnalytics();
       },
       
       handleMultipleFileUpload(files) {
@@ -290,6 +374,7 @@ function initializeAnalytics() {
             this.analyzeTranscriptForAnalytics(transcriptText, file.name, fileItem, callback);
           })
           .catch(error => {
+            console.error("Error transcribing audio:", error);
             statusSpan.textContent = 'Error';
             statusSpan.style.color = 'var(--danger)';
             callback();
@@ -344,30 +429,43 @@ function initializeAnalytics() {
         
         statusSpan.textContent = 'Saving...';
         
-        if (db) {
-          const transcriptsRef = db.ref('transcripts');
-          const newTranscriptRef = transcriptsRef.push();
-          
-          newTranscriptRef.set(transcriptData)
-            .then(() => {
-              statusSpan.textContent = 'Completed';
-              statusSpan.style.color = 'var(--success)';
-              callback();
-            })
-            .catch(error => {
-              statusSpan.textContent = 'Error';
-              statusSpan.style.color = 'var(--danger)';
-              callback();
-            });
+        if (window.db) {
+          try {
+            const transcriptsRef = window.db.ref('transcripts');
+            const newTranscriptRef = transcriptsRef.push();
+            
+            newTranscriptRef.set(transcriptData)
+              .then(() => {
+                statusSpan.textContent = 'Completed';
+                statusSpan.style.color = 'var(--success)';
+                callback();
+              })
+              .catch(error => {
+                console.error("Error saving to Firebase:", error);
+                statusSpan.textContent = 'Error';
+                statusSpan.style.color = 'var(--danger)';
+                callback();
+              });
+          } catch (error) {
+            console.error("Error with Firebase reference:", error);
+            statusSpan.textContent = 'Error';
+            statusSpan.style.color = 'var(--danger)';
+            callback();
+          }
         } else {
-          statusSpan.textContent = 'No database';
-          statusSpan.style.color = 'var(--warning)';
+          // Add to local analytics data if no database
+          this.analyticsData.push(transcriptData);
+          this.filteredData = [...this.analyticsData];
+          this.updateAnalytics();
+          
+          statusSpan.textContent = 'Completed (Local)';
+          statusSpan.style.color = 'var(--success)';
           callback();
         }
       },
       
       applyFilters() {
-        if (!this.analyticsData) return;
+        if (!this.analyticsData || this.analyticsData.length === 0) return;
         
         this.filteredData = this.analyticsData.filter(item => {
           const speciesMatch = this.filters.species === 'all' || item.petType === this.filters.species;
@@ -448,7 +546,11 @@ function initializeAnalytics() {
       },
       
       updateQuestionsChart() {
-        if (!questionChart) return;
+        if (!window.questionChart) {
+          console.warn("Chart not initialized, trying to initialize");
+          this.initKeyQuestionsChart();
+          if (!window.questionChart) return;
+        }
         
         // Calculate question types
         const questionTypes = {
@@ -483,15 +585,19 @@ function initializeAnalytics() {
           }
         });
         
-        questionChart.data.datasets[0].data = [
-          questionTypes.vet,
-          questionTypes.diet,
-          questionTypes.behavior,
-          questionTypes.health,
-          questionTypes.grooming
-        ];
-        
-        questionChart.update();
+        try {
+          window.questionChart.data.datasets[0].data = [
+            questionTypes.vet,
+            questionTypes.diet,
+            questionTypes.behavior,
+            questionTypes.health,
+            questionTypes.grooming
+          ];
+          
+          window.questionChart.update();
+        } catch (error) {
+          console.error("Error updating chart:", error);
+        }
       },
       
       updateTranscriptsTable() {
@@ -864,8 +970,8 @@ function initializeAnalytics() {
         const missedOpportunities = this.filteredData.filter(item => !item.clinicPitched);
         
         const totalTranscripts = this.filteredData.length;
-        const pitchPercentage = Math.round((clinicPitches.length / totalTranscripts) * 100);
-        const missedPercentage = Math.round((missedOpportunities.length / totalTranscripts) * 100);
+        const pitchPercentage = Math.round((clinicPitches.length / totalTranscripts) * 100) || 0;
+        const missedPercentage = Math.round((missedOpportunities.length / totalTranscripts) * 100) || 0;
         
         // Calculate potential opportunities
         const healthIssues = this.filteredData.filter(item => item.keyIssues.includes('health') && !item.clinicPitched);
@@ -1048,13 +1154,14 @@ function initializeAnalytics() {
         return clinicKeywords.some(keyword => text.toLowerCase().includes(keyword));
       }
     }
-  });
+  }).mount('#analytics-view');
   
-  analyticsApp.mount('#analytics-view');
+  // Make the analytics app globally available
+  window.analyticsApp = analyticsApp;
 }
 
 function updateAnalytics() {
-  if (analyticsApp) {
-    analyticsApp.updateAnalytics();
+  if (window.analyticsApp) {
+    window.analyticsApp.updateAnalytics();
   }
 }

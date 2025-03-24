@@ -138,7 +138,9 @@ const app = Vue.createApp({
       } else if (viewType === 'analytics') {
         chatView.style.display = 'none';
         analyticsView.style.display = 'flex';
-        updateAnalytics();
+        if (window.updateAnalytics) {
+          window.updateAnalytics();
+        }
       }
     },
     
@@ -285,7 +287,14 @@ const app = Vue.createApp({
         timestamp: new Date().toISOString()
       };
       
-      this.saveTranscriptToDatabase(this.transcriptData);
+      // Only try to save to database if it's available
+      try {
+        if (window.db) {
+          this.saveTranscriptToDatabase(this.transcriptData);
+        }
+      } catch (error) {
+        console.warn("Could not save to database:", error);
+      }
     },
     
     detectPetType(text) {
@@ -408,7 +417,7 @@ const app = Vue.createApp({
       const foodKeywords = ['food', 'diet', 'feeding', 'nutrition', 'meal', 'kibble', 'wet food', 'dry food', 'treats'];
       const pharmacyKeywords = ['medicine', 'medication', 'prescription', 'tablets', 'pills', 'treatment', 'therapy'];
       
-              const foodScore = foodKeywords.reduce((score, keyword) => {
+      const foodScore = foodKeywords.reduce((score, keyword) => {
         return score + (text.toLowerCase().match(new RegExp(`\\b${keyword}\\b`, 'g')) || []).length;
       }, 0);
       
@@ -432,11 +441,17 @@ const app = Vue.createApp({
     },
     
     saveTranscriptToDatabase(transcriptData) {
-      if (db) {
-        const transcriptsRef = db.ref('transcripts');
-        const newTranscriptRef = transcriptsRef.push();
-        newTranscriptRef.set(transcriptData)
-          .catch(error => console.error('Error saving transcript to database:', error));
+      try {
+        if (window.db) {
+          const transcriptsRef = window.db.ref('transcripts');
+          const newTranscriptRef = transcriptsRef.push();
+          newTranscriptRef.set(transcriptData)
+            .catch(error => console.error('Error saving transcript to database:', error));
+        } else {
+          console.warn("Database not available for saving transcript");
+        }
+      } catch (error) {
+        console.error("Error in saveTranscriptToDatabase:", error);
       }
     },
     
@@ -676,6 +691,8 @@ Answer the question based ONLY on information found in the transcript. If you ca
           prompt: 'Based on the transcript, analyze any behavioral issues or concerns mentioned about the pet. What behaviors are problematic and what might be causing them?'
         }
       ];
+      
+      this.elements.specialPromptButtons.innerHTML = '';
       
       specialPrompts.forEach(item => {
         const button = this.createSpecialPromptButton(item.label, item.prompt);
