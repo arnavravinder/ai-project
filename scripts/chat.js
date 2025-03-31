@@ -45,6 +45,7 @@ export function chatComponent(mainApp) {
                  formattedText = formattedText.replace(/`([^`]+)`/g, '<code>$1</code>');   // Inline code
                  formattedText = formattedText.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>'); // Code blocks
                  formattedText = formattedText.replace(/^\s*-\s+(.*)/gm, '<li>$1</li>'); // Basic lists (needs wrapping ul) - simplified
+                 formattedText = formattedText.replace(/(\<li.*\>.*?\<\/li\>)/gs, '<ul class="list-unstyled ps-3 mt-2">$1</ul>') // Wrap lists
                  formattedText = formattedText.replace(/\n/g, '<br>'); // Newlines
                  return formattedText;
             };
@@ -79,18 +80,25 @@ export function chatComponent(mainApp) {
                             currentTranscript.value = e.target.result;
                             finishProcessing();
                         };
-                        reader.onerror = () => throw new Error("Error reading text file.");
+                        // *** CORRECTED LINE ***
+                        reader.onerror = () => { throw new Error("Error reading text file."); };
                         reader.readAsText(file);
                     } else {
+                        // Handle non-text, non-audio files (like PDF, DOCX)
+                        // For now, just indicate analysis is limited
+                        // In a real app, you might use server-side extraction for these
                         currentTranscript.value = `[Content of file '${file.name}' (${file.type}) - analysis will focus on metadata and user queries.]`;
                          finishProcessing("File type non-text; basic analysis available.");
                     }
                 } catch (error) {
                     console.error("Error handling file upload:", error);
                     setFileFeedback('error', `Error processing file: ${error.message}`);
-                    resetChatState();
+                    resetChatState(); // Reset to allow re-upload attempt
+                    // Let the user know processing failed but keep UI interactive
+                    isLoading.value = false;
+                    isUploading.value = true; // Go back to upload state on error
                 } finally {
-                    // isLoading is set to false within finishProcessing or transcribeAndProcess error handling
+                   // isLoading state is managed within the try/catch/transcribe blocks now
                 }
             };
 
@@ -98,7 +106,7 @@ export function chatComponent(mainApp) {
                  setFileFeedback('info', 'Transcribing audio... This may take a moment.');
                  const formData = new FormData();
                  formData.append('file', file);
-                 formData.append('language', 'auto');
+                 formData.append('language', 'auto'); // Or get from a UI element if you add one
 
                  try {
                     const response = await fetch(TRANSCRIBE_API_ENDPOINT, {
@@ -116,7 +124,12 @@ export function chatComponent(mainApp) {
                  } catch (error) {
                      console.error("Transcription error:", error);
                      setFileFeedback('error', `Transcription failed: ${error.message}`);
-                     resetChatState(); // Keep upload state active on transcription failure
+                     // Reset crucial state but keep upload active
+                     currentFile.value = null;
+                     currentFileName.value = '';
+                     isLoading.value = false;
+                     isUploading.value = true; // Ensure user can try again
+                     // Don't call resetChatState fully as it clears feedback
                  }
             };
 
@@ -218,9 +231,10 @@ export function chatComponent(mainApp) {
                 handleDragLeave,
                 resetChatState,
                 chatBodyRef,
-                formatMarkdown
+                formatMarkdown // Ensure formatMarkdown is returned if used in template (it isn't currently, but good practice)
             };
         },
+        // Template remains the same as before
         template: `
             <div class="card chat-card h-100">
               <div class="chat-area">
@@ -264,7 +278,10 @@ export function chatComponent(mainApp) {
                                     <i :class="['fas', message.sender === 'user' ? 'fa-user' : 'fa-robot']"></i>
                                 </div>
                                 <div class="message-content">
-                                    <div class="message-text" v-html="message.sender === 'bot' ? formatMarkdown(message.text) : message.text"></div>
+                                    {/* Use v-html for formatted bot messages */}
+                                    <div class="message-text" v-if="message.sender === 'bot'" v-html="formatMarkdown(message.text)"></div>
+                                    {/* Display user messages directly */}
+                                    <div class="message-text" v-else>{{ message.text }}</div>
                                 </div>
                             </template>
                         </div>
