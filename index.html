@@ -46,7 +46,7 @@
                     <label for="languageSelect" class="col-form-label col-form-label-sm">Language:</label>
                  </div>
                  <div class="col-auto">
-                    <select id="languageSelect" class="form-select form-select-sm">
+                    <select id="languageSelect" class="form-select form-select-sm filter-select">
                       <option value="en">English</option>
                       <option value="hi">Hindi</option>
                       <option value="auto">Auto Detect</option>
@@ -56,7 +56,7 @@
                     <label for="uniqueIdInput" class="col-form-label col-form-label-sm">Identifier (Optional):</label>
                  </div>
                  <div class="col-auto">
-                    <input type="text" id="uniqueIdInput" class="form-control form-control-sm" placeholder="e.g., email@example.com">
+                    <input type="text" id="uniqueIdInput" class="form-control form-control-sm filter-select" placeholder="e.g., email@example.com">
                  </div>
               </div>
 
@@ -98,7 +98,6 @@
             </div>
 
             <div id="chatMessages" class="chat-body custom-scrollbar">
-                <!-- Messages will be rendered here by Vue -->
                 <div v-for="(msg, index) in chatHistory" :key="index" class="message" :class="{'user-message': msg.type === 'user'}">
                      <div class="avatar" :class="msg.type === 'user' ? 'user-avatar' : 'bot-avatar'">
                          <i :class="['fas', msg.type === 'user' ? 'fa-user' : 'fa-robot']"></i>
@@ -114,23 +113,21 @@
             </div>
 
             <div class="chat-footer">
-                <!-- Predefined Prompt Buttons -->
                 <div id="predefinedPrompts" class="predefined-prompts mb-2">
-                    <button @click="sendPredefinedPrompt('knowledge')" class="btn btn-outline-secondary btn-sm" :disabled="!currentTranscript || isProcessing">
+                    <button @click="sendPredefinedPrompt('knowledge')" class="btn btn-outline-secondary btn-sm" :disabled="!currentTranscript || isProcessing || isGeminiProcessing">
                         <i class="fas fa-brain"></i> Knowledge Score
                     </button>
-                    <button @click="sendPredefinedPrompt('diet')" class="btn btn-outline-secondary btn-sm" :disabled="!currentTranscript || isProcessing">
+                    <button @click="sendPredefinedPrompt('diet')" class="btn btn-outline-secondary btn-sm" :disabled="!currentTranscript || isProcessing || isGeminiProcessing">
                         <i class="fas fa-bone"></i> Analyze Diet
                     </button>
-                    <button @click="sendPredefinedPrompt('summary')" class="btn btn-outline-secondary btn-sm" :disabled="!currentTranscript || isProcessing">
+                    <button @click="sendPredefinedPrompt('summary')" class="btn btn-outline-secondary btn-sm" :disabled="!currentTranscript || isProcessing || isGeminiProcessing">
                         <i class="fas fa-list-alt"></i> Summarize Call
                     </button>
                  </div>
-                 <!-- End Predefined Prompt Buttons -->
 
               <div class="input-group">
-                <input type="text" class="form-control chat-input" id="userInput" placeholder="Ask about the current transcript..." v-model="userInputText" @keypress.enter="sendMessage" :disabled="isProcessing || !currentTranscript">
-                <button class="btn btn-primary chat-submit" id="sendMessageBtn" @click="sendMessage" :disabled="isProcessing || !currentTranscript || !userInputText.trim()">
+                <input type="text" class="form-control chat-input" id="userInput" placeholder="Ask about the current transcript..." v-model="userInputText" @keypress.enter="sendMessage" :disabled="isProcessing || isGeminiProcessing || !currentTranscript">
+                <button class="btn btn-primary chat-submit" id="sendMessageBtn" @click="sendMessage" :disabled="isProcessing || isGeminiProcessing || !currentTranscript || !userInputText.trim()">
                   <i class="fas fa-paper-plane"></i>
                 </button>
               </div>
@@ -139,16 +136,14 @@
         </div>
       </div>
 
-      <!-- Analytics View remains the same -->
       <div id="analytics-view" class="container-fluid view-container">
-          <!-- Existing Analytics HTML -->
            <div id="analytics-app" class="card h-100">
                <h2>Pet Parent Analytics Dashboard</h2>
 
                <div class="row g-2 mb-3 analytics-controls align-items-end">
                    <div class="col-md-2">
                        <label for="filterSpecies" class="form-label form-label-sm">Species:</label>
-                       <select id="filterSpecies" class="form-select form-select-sm filter-select" v-model="filters.species" @change="applyFilters">
+                       <select id="filterSpecies" class="form-select form-select-sm filter-select" v-model="filters.species" @change="applyFiltersDebounced">
                            <option value="all">All</option>
                            <option value="dog">Dog</option>
                            <option value="cat">Cat</option>
@@ -157,7 +152,7 @@
                    </div>
                    <div class="col-md-2">
                        <label for="filterLifeStage" class="form-label form-label-sm">Life Stage:</label>
-                       <select id="filterLifeStage" class="form-select form-select-sm filter-select" v-model="filters.lifeStage" @change="applyFilters">
+                       <select id="filterLifeStage" class="form-select form-select-sm filter-select" v-model="filters.lifeStage" @change="applyFiltersDebounced">
                            <option value="all">All</option>
                            <option value="puppy">Puppy/Kitten</option>
                            <option value="adult">Adult</option>
@@ -166,11 +161,12 @@
                    </div>
                    <div class="col-md-2">
                        <label for="filterCategory" class="form-label form-label-sm">Category:</label>
-                       <select id="filterCategory" class="form-select form-select-sm filter-select" v-model="filters.category" @change="applyFilters">
+                       <select id="filterCategory" class="form-select form-select-sm filter-select" v-model="filters.category" @change="applyFiltersDebounced">
                            <option value="all">All</option>
                            <option value="food">Food</option>
                            <option value="pharmacy">Pharmacy</option>
                            <option value="both">Both</option>
+                           <option value="general">General</option>
                        </select>
                    </div>
                     <div class="col-md-3">
@@ -319,9 +315,9 @@
                        <div class="analytics-section full-width">
                            <div class="d-flex justify-content-between align-items-center mb-2">
                              <h5 class="mb-0">Key Insights (Generated by AI)</h5>
-                             <button class="btn btn-sm btn-primary" @click="generateAllInsights" :disabled="generatingInsights || filteredData.length === 0">
-                                <span v-if="generatingInsights" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                                {{ generatingInsights ? 'Generating...' : 'Refresh Insights' }}
+                             <button class="btn btn-sm btn-primary" @click="generateAllInsights" :disabled="generatingInsights || isInsightProcessing || filteredData.length === 0">
+                                <span v-if="generatingInsights || isInsightProcessing" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                {{ (generatingInsights || isInsightProcessing) ? 'Generating...' : 'Refresh Insights' }}
                               </button>
                            </div>
                            <div class="insights-container">
@@ -347,22 +343,22 @@
                                </ul>
                                <div class="tab-content insight-content" id="insightTabContent">
                                  <div class="tab-pane fade show active insight-panel" id="commonQuestionsPanel" role="tabpanel">
-                                   <div v-html="insights.commonQuestions || '<p class=text-muted>Generate insights or apply different filters...</p>'" class="insight-data custom-scrollbar"></div>
+                                   <div v-html="insights.commonQuestions || '<p class=text-muted>Click Refresh Insights...</p>'" class="insight-data custom-scrollbar"></div>
                                  </div>
                                  <div class="tab-pane fade insight-panel" id="customerDifferencesPanel" role="tabpanel">
-                                   <div v-html="insights.customerDifferences || '<p class=text-muted>Generate insights or apply different filters...</p>'" class="insight-data custom-scrollbar"></div>
+                                   <div v-html="insights.customerDifferences || '<p class=text-muted>Click Refresh Insights...</p>'" class="insight-data custom-scrollbar"></div>
                                  </div>
                                  <div class="tab-pane fade insight-panel" id="excitementFactorsPanel" role="tabpanel">
-                                  <div v-html="insights.excitementFactors || '<p class=text-muted>Generate insights or apply different filters...</p>'" class="insight-data custom-scrollbar"></div>
+                                  <div v-html="insights.excitementFactors || '<p class=text-muted>Click Refresh Insights...</p>'" class="insight-data custom-scrollbar"></div>
                                  </div>
                                  <div class="tab-pane fade insight-panel" id="effectivePitchesPanel" role="tabpanel">
-                                   <div v-html="insights.effectivePitches || '<p class=text-muted>Generate insights or apply different filters...</p>'" class="insight-data custom-scrollbar"></div>
+                                   <div v-html="insights.effectivePitches || '<p class=text-muted>Click Refresh Insights...</p>'" class="insight-data custom-scrollbar"></div>
                                  </div>
                                   <div class="tab-pane fade insight-panel" id="lifeStageInsightsPanel" role="tabpanel">
-                                   <div v-html="insights.lifeStageInsights || '<p class=text-muted>Generate insights or apply different filters...</p>'" class="insight-data custom-scrollbar"></div>
+                                   <div v-html="insights.lifeStageInsights || '<p class=text-muted>Click Refresh Insights...</p>'" class="insight-data custom-scrollbar"></div>
                                  </div>
                                   <div class="tab-pane fade insight-panel" id="clinicOpportunitiesPanel" role="tabpanel">
-                                   <div v-html="insights.clinicOpportunities || '<p class=text-muted>Generate insights or apply different filters...</p>'" class="insight-data custom-scrollbar"></div>
+                                   <div v-html="insights.clinicOpportunities || '<p class=text-muted>Click Refresh Insights...</p>'" class="insight-data custom-scrollbar"></div>
                                  </div>
                                </div>
                            </div>
@@ -484,22 +480,19 @@
 
           views.forEach(view => {
             const viewId = view.id;
-            // Check both possible ID formats
             if (viewId === `main-${targetView}-view` || viewId === `${targetView}-view`) {
                view.classList.add('active-view');
                view.classList.remove('d-none');
-               view.style.display = ''; // Use default display (flex)
+               view.style.display = '';
             } else {
                view.classList.remove('active-view');
-               view.style.display = 'none'; // Explicitly hide
+                view.style.display = 'none';
             }
           });
 
           if (targetView === 'analytics' && window.analyticsApp) {
-             // Give DOM time to render before refreshing charts
              setTimeout(() => {
                  window.analyticsApp.refreshCharts();
-                 // Check if data needs fetching (e.g., if initial load failed)
                  if (window.analyticsApp.analyticsData.length === 0 && !window.analyticsApp.loading) {
                     window.analyticsApp.fetchAnalyticsData();
                  }
@@ -510,18 +503,15 @@
         });
       });
 
-       // Initialize default view (Chat) on load
       const initialViewButton = document.querySelector('.view-toggle-btn[data-view="chat"]');
       if (initialViewButton) {
         initialViewButton.click();
       } else {
-         // Fallback if button isn't found
          const chatView = document.getElementById('main-chat-view') || document.getElementById('chat-view');
          const analyticsView = document.getElementById('main-analytics-view') || document.getElementById('analytics-view');
          if (chatView) chatView.style.display = '';
          if (analyticsView) analyticsView.style.display = 'none';
       }
-
     });
   </script>
 </body>
