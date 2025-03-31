@@ -76,7 +76,7 @@ const chatApp = Vue.createApp({
           this.elements.dropArea.style.borderColor = 'var(--primary-light)';
           this.elements.dropArea.style.backgroundColor = 'rgba(140, 82, 255, 0.05)';
           if (e.dataTransfer.files?.length > 0) {
-              this.elements.fileInput.files = e.dataTransfer.files; // Assign dropped files
+              this.elements.fileInput.files = e.dataTransfer.files;
               this.handleFileUpload(e.dataTransfer.files[0]);
           }
       },
@@ -113,7 +113,7 @@ const chatApp = Vue.createApp({
       handleFileUpload(file) {
         if (!file) return;
         const allowedTypes = ['text/plain', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a'];
-        const maxFileSize = 25 * 1024 * 1024; // 25MB
+        const maxFileSize = 25 * 1024 * 1024;
   
         if (!allowedTypes.some(type => file.type.startsWith(type.split('/')[0]))) {
           this.showFileFeedback('error', 'Invalid file type. Allowed: .txt, .pdf, .doc(x), audio files.');
@@ -131,13 +131,15 @@ const chatApp = Vue.createApp({
         this.elements.transcriptOptions.style.display = 'block';
         this.currentAudioFile = null;
         this.elements.audioContainer.style.display = 'none';
-        this.elements.transcriptInput.value = ''; // Clear pasted text
+        this.elements.transcriptInput.value = '';
+        this.elements.processWithoutTranscriptBtn.disabled = true; // Disable by default
   
         if (file.type.startsWith('audio/')) {
           this.currentAudioFile = file;
           const audioUrl = URL.createObjectURL(file);
           this.elements.audioPlayer.src = audioUrl;
           this.elements.audioContainer.style.display = 'block';
+          this.elements.processWithoutTranscriptBtn.disabled = false; // Enable for audio
           this.showFileFeedback('info', 'Audio ready. Provide transcript or click Transcribe.');
         } else if (file.type === 'text/plain') {
           const reader = new FileReader();
@@ -148,14 +150,7 @@ const chatApp = Vue.createApp({
           reader.onerror = () => this.showFileFeedback('error', 'Error reading text file.');
           reader.readAsText(file);
         } else {
-            // For PDF/DOCX - we can't display content, just acknowledge upload
-             this.showFileFeedback('info', `${file.type.split('/')[1].toUpperCase()} file uploaded. Provide transcript or transcribe audio (if applicable).`);
-             // If it's *not* audio, disable the "Transcribe" button
-             this.elements.processWithoutTranscriptBtn.disabled = true;
-        }
-         // Re-enable transcribe button if audio was uploaded
-        if(this.currentAudioFile) {
-            this.elements.processWithoutTranscriptBtn.disabled = false;
+             this.showFileFeedback('info', `${file.type.split('/')[1].toUpperCase()} file uploaded. Provide transcript manually if needed.`);
         }
   
          this.currentUniqueId = this.elements.uniqueIdInput.value.trim();
@@ -169,6 +164,7 @@ const chatApp = Vue.createApp({
           }
           this.currentTranscript = transcriptText;
           this.startChatSession();
+          this.saveTranscriptIfApplicable(); // Save after starting session
       },
   
       processWithoutTranscript() {
@@ -187,7 +183,11 @@ const chatApp = Vue.createApp({
   
           const formData = new FormData();
           formData.append('file', file);
-          formData.append('language', this.elements.languageSelect.value);
+          // --- FIX: Read selected language value correctly ---
+          const selectedLanguage = this.elements.languageSelect.value;
+          formData.append('language', selectedLanguage);
+          console.log("Sending language to transcribe API:", selectedLanguage); // Debugging log
+          // --- END FIX ---
   
           fetch(this.transcribeApiUrl, { method: 'POST', body: formData })
               .then(response => {
@@ -200,57 +200,61 @@ const chatApp = Vue.createApp({
                   this.currentTranscript = transcriptText;
                   this.showFileFeedback('success', 'Audio transcribed successfully!');
                   this.startChatSession();
+                  this.saveTranscriptIfApplicable(); // Save after successful transcription
               })
               .catch(error => {
                   console.error("Transcription error:", error);
-                  this.showFileFeedback('error', `Transcription failed: ${error.message}. Using default.`);
-                  this.currentTranscript = this.defaultTranscript;
-                  this.startChatSession(); // Proceed even if transcription fails
-              })
-              .finally(() => {
-                   this.isProcessing = false;
-                   // Hiding loading might happen too soon if startChatSession is quick
+                  this.showFileFeedback('error', `Transcription failed: ${error.message}. Cannot proceed with chat.`);
+                  // Don't proceed to chat if transcription fails and is required
+                  this.resetChatView(); // Go back to upload state
+                  this.isProcessing = false;
+                  this.elements.loadingSection.style.display = 'none';
               });
+               // .finally() removed as resetChatView handles UI cleanup on error
       },
   
        startChatSession() {
            this.isProcessing = true;
            this.elements.uploadSection.style.display = 'none';
-           this.elements.loadingSection.style.display = 'flex'; // Show loading briefly
+           this.elements.loadingSection.style.display = 'flex';
   
-           // Simulate analysis / setup time
            setTimeout(() => {
                this.chatHistory = [{ type: 'bot', text: "I've processed the transcript. Ask me anything about it." }];
                this.elements.loadingSection.style.display = 'none';
                this.elements.chatSection.classList.remove('d-none');
                this.isProcessing = false;
                this.scrollChatToBottom();
-                // Optionally save transcript to DB here if needed immediately
-               // this.saveTranscriptIfApplicable();
            }, 500);
       },
   
-      // Optional: Add function to save transcript + basic analysis to DB from chat view
-      saveTranscriptIfApplicable() {
-          if (this.currentTranscript && this.currentTranscript !== this.defaultTranscript && window.db) {
+       async saveTranscriptIfApplicable() {
+          if (!this.currentTranscript || this.currentTranscript === this.defaultTranscript) {
+              return;
+          }
+  
+          try {
+              const db = await initializeFirebase(); // Wait for DB connection
+              if (!db) throw new Error("Database not available for saving.");
+  
                const analysisData = this.analyzeTranscriptText(this.currentTranscript);
                const transcriptData = {
                    text: this.currentTranscript,
                    uniqueId: this.currentUniqueId || `chat_${Date.now()}@anon.com`,
                    timestamp: new Date().toISOString(),
-                   ...analysisData // Add basic analysis results
+                   ...analysisData
                };
-               try {
-                  const newTranscriptRef = window.db.ref('transcripts').push();
-                  newTranscriptRef.set(transcriptData);
-                  console.log("Transcript saved from chat view:", newTranscriptRef.key);
-               } catch(err) {
-                   console.error("Failed to save transcript from chat:", err);
-               }
-          }
+  
+              const newTranscriptRef = db.ref('transcripts').push();
+              await newTranscriptRef.set(transcriptData);
+              console.log("Transcript saved from chat view:", newTranscriptRef.key);
+  
+           } catch(err) {
+               console.error("Failed to save transcript from chat:", err);
+               // Optionally inform the user saving failed, but chat can continue
+               this.addMessageToChat('bot', "(Note: Failed to save this transcript to the database.)");
+           }
       },
   
-       // Basic analysis functions (can be shared or duplicated from analytics.js)
        analyzeTranscriptText(text) {
           if (!text) return {};
           return {
@@ -272,7 +276,7 @@ const chatApp = Vue.createApp({
         const catCount = catKeywords.reduce((n, k) => n + (lowerText.match(new RegExp(`\\b${k}\\b`, 'g')) || []).length, 0);
         if (dogCount > catCount) return 'dog';
         if (catCount > dogCount) return 'cat';
-        if (dogCount > 0 || catCount > 0) return 'other'; // Treat 'both' as 'other' for simplicity
+        if (dogCount > 0 || catCount > 0) return 'other';
         return 'unknown';
       },
   
@@ -282,11 +286,10 @@ const chatApp = Vue.createApp({
               const match = text.match(pattern);
               if (match && match[1]) return match[1].charAt(0).toUpperCase() + match[1].slice(1);
           }
-          // Basic fallback: Look for capitalized words near pet keywords
           const words = text.split(/\s+/);
           const petKeywords = ['dog', 'cat', 'pet', 'puppy', 'kitten'];
           for (let i = 0; i < words.length; i++) {
-              if (/^[A-Z][a-z]{2,}$/.test(words[i])) {
+               if (/^[A-Z][a-z]{2,}$/.test(words[i]) && !['I', 'He', 'She', 'They', 'My', 'The'].includes(words[i])) {
                    if (i > 0 && petKeywords.includes(words[i-1].toLowerCase().replace(/[.,!?]/g, ''))) return words[i];
                    if (i < words.length - 1 && petKeywords.includes(words[i+1].toLowerCase().replace(/[.,!?]/g, ''))) return words[i];
               }
@@ -317,9 +320,9 @@ const chatApp = Vue.createApp({
           const issues = new Set();
           const categories = {
               diet: ['food', 'feed', 'diet', 'eating', 'nutrition', 'meal', 'appetite', 'kibble', 'treats'],
-              health: ['sick', 'pain', 'hurt', 'vet', 'medicine', 'symptom', 'treatment', 'disease', 'condition', 'vaccination', 'pills', 'arthritis', 'check-up'],
-              behavior: ['behavior', 'training', 'aggressive', 'anxiety', 'scared', 'barking', 'biting', 'chewing', 'house-trained', 'litter box'],
-              grooming: ['groom', 'bath', 'fur', 'hair', 'brush', 'nail', 'coat', 'shedding']
+              health: ['sick', 'pain', 'hurt', 'vet', 'medicine', 'symptom', 'treatment', 'disease', 'condition', 'vaccination', 'pills', 'arthritis', 'check-up', 'ill', 'vomit', 'diarrhea'],
+              behavior: ['behavior', 'training', 'aggressive', 'anxiety', 'scared', 'barking', 'biting', 'chewing', 'house-trained', 'litter box', 'destructive'],
+              grooming: ['groom', 'bath', 'fur', 'hair', 'brush', 'nail', 'coat', 'shedding', 'matting']
           };
           const lowerText = text.toLowerCase();
           for (const [category, keywords] of Object.entries(categories)) {
@@ -333,18 +336,18 @@ const chatApp = Vue.createApp({
       detectCustomerCategory(text) {
           const lowerText = text.toLowerCase();
           const foodKeywords = ['food', 'diet', 'feeding', 'nutrition', 'meal', 'kibble', 'wet food', 'dry food', 'treats'];
-          const pharmacyKeywords = ['medicine', 'medication', 'prescription', 'tablets', 'pills', 'treatment', 'therapy', 'arthritis', 'vaccination', 'supplement'];
+          const pharmacyKeywords = ['medicine', 'medication', 'prescription', 'tablets', 'pills', 'treatment', 'therapy', 'arthritis', 'vaccination', 'supplement', 'flea', 'tick', 'worm'];
           const foodScore = foodKeywords.reduce((n, k) => n + (lowerText.match(new RegExp(`\\b${k}\\b`, 'g')) || []).length, 0);
           const pharmacyScore = pharmacyKeywords.reduce((n, k) => n + (lowerText.match(new RegExp(`\\b${k}\\b`, 'g')) || []).length, 0);
           if (foodScore > 0 && pharmacyScore > 0) return 'both';
           if (foodScore > pharmacyScore) return 'food';
           if (pharmacyScore > foodScore) return 'pharmacy';
-          return 'general'; // Or 'unknown'
+          return 'general';
       },
   
       detectClinicPitch(text) {
-          const clinicKeywords = ['vet visit', 'veterinary clinic', 'check-up', 'examination', 'schedule an appointment', 'visit the vet', 'bring (him|her|them|your pet) in', 'veterinary care', 'clinic', 'veterinarian'];
-          return clinicKeywords.some(keyword => text.toLowerCase().match(new RegExp(`\\b${keyword}\\b`, 'i')));
+          const clinicKeywords = ['vet visit', 'veterinary clinic', 'check-up', 'examination', 'schedule an appointment', 'visit the vet', 'bring (him|her|them|your pet) in', 'veterinary care', 'clinic', 'veterinarian', 'vet appointment'];
+          return clinicKeywords.some(keyword => text.toLowerCase().match(new RegExp(keyword.replace(/\s/g, '\\s*'), 'i')));
       },
   
       sendMessage() {
@@ -369,13 +372,11 @@ const chatApp = Vue.createApp({
   
       addTypingIndicator() {
           this.isProcessing = true;
-          // The indicator is now handled by a v-if in the template
           this.scrollChatToBottom();
       },
   
       removeTypingIndicator() {
          this.isProcessing = false;
-         // The indicator is now handled by a v-if in the template
       },
   
        scrollChatToBottom() {
@@ -390,14 +391,13 @@ const chatApp = Vue.createApp({
       formatMarkdown(text) {
           if (!text) return '';
           let html = text;
-          html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // Bold
-          html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');       // Italic
-          html = html.replace(/`(.*?)`/g, '<code>$1</code>');     // Code
-          html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>'); // Links
-          html = html.replace(/^\s*[-*+]\s+(.*)/gm, '<li>$1</li>'); // List items
-           // Wrap consecutive list items in <ul>
+          html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+          html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+          html = html.replace(/`(.*?)`/g, '<code>$1</code>');
+          html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
+          html = html.replace(/^\s*[-*+]\s+(.*)/gm, '<li>$1</li>');
           html = html.replace(/(<li>.*<\/li>\s*)+/g, (match) => `<ul>${match}</ul>`);
-          html = html.replace(/\n/g, '<br>'); // Newlines
+          html = html.replace(/\n/g, '<br>');
           return html;
       },
   
@@ -451,5 +451,4 @@ const chatApp = Vue.createApp({
     }
   }).mount('#chat-app');
   
-  window.chatApp = chatApp; // Make accessible globally if needed
-  
+  window.chatApp = chatApp;

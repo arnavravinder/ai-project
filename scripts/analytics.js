@@ -17,10 +17,10 @@ const analyticsApp = Vue.createApp({
                 commonQuestions: '', customerDifferences: '', excitementFactors: '',
                 effectivePitches: '', lifeStageInsights: '', clinicOpportunities: ''
             },
-            detailTranscript: null, // For modal
-            selectedTranscriptId: null, // For radio button selection and chat target
-            chatTargetTranscript: null, // Transcript object for chat modal
-            showChatModal: false, // Controls chat modal visibility via v-if or CSS potentially
+            detailTranscript: null,
+            selectedTranscriptId: null,
+            chatTargetTranscript: null,
+            showChatModal: false,
             transcriptChatHistory: [],
             transcriptChatInput: '',
             chatLoading: false,
@@ -32,6 +32,7 @@ const analyticsApp = Vue.createApp({
             chatModalInstance: null,
             geminiApiUrl: "https://supertails.vercel.app/api/gemini",
             transcribeApiUrl: "https://supertails.vercel.app/api/transcribe",
+            dbListenerAttached: false,
         };
     },
 
@@ -78,32 +79,37 @@ const analyticsApp = Vue.createApp({
         this.initializeCharts();
         this.fetchAnalyticsData();
 
-         // Initialize Modals
         const detailModalEl = document.getElementById('transcriptDetailModal');
-        if (detailModalEl) {
-            this.detailModalInstance = new bootstrap.Modal(detailModalEl);
-        }
-         const chatModalEl = document.getElementById('transcriptChatModal');
+        if (detailModalEl) this.detailModalInstance = new bootstrap.Modal(detailModalEl);
+
+        const chatModalEl = document.getElementById('transcriptChatModal');
         if (chatModalEl) {
             this.chatModalInstance = new bootstrap.Modal(chatModalEl);
-             chatModalEl.addEventListener('hidden.bs.modal', this.resetChatModal);
+            chatModalEl.addEventListener('hidden.bs.modal', this.resetChatModal);
         }
     },
 
     beforeUnmount() {
-         const chatModalEl = document.getElementById('transcriptChatModal');
-         if (chatModalEl) {
-             chatModalEl.removeEventListener('hidden.bs.modal', this.resetChatModal);
+        const chatModalEl = document.getElementById('transcriptChatModal');
+        if (chatModalEl) chatModalEl.removeEventListener('hidden.bs.modal', this.resetChatModal);
+
+        if (this.debounceTimer) clearTimeout(this.debounceTimer);
+        if (this.petDistributionChartInstance) this.petDistributionChartInstance.destroy();
+
+        if (this.dbListenerAttached) {
+            initializeFirebase().then(db => {
+                if (db && db.ref) { // Check if db and ref exist
+                     db.ref('transcripts').off('value');
+                     console.log("Firebase listener detached.");
+                     this.dbListenerAttached = false;
+                 }
+            }).catch(e => console.error("Error getting DB instance to detach listener:", e));
          }
-         if (this.debounceTimer) clearTimeout(this.debounceTimer);
-         // Destroy charts
-         if (this.petDistributionChartInstance) this.petDistributionChartInstance.destroy();
     },
 
 
     methods: {
         setupEventListeners() {
-           // Filters are handled by v-model and @change/@input
         },
 
         initializeCharts() {
@@ -113,7 +119,6 @@ const analyticsApp = Vue.createApp({
         refreshCharts() {
              this.$nextTick(() => {
                  this.updatePetDistributionChart();
-                 // Update other charts if they exist
              });
         },
 
@@ -145,55 +150,84 @@ const analyticsApp = Vue.createApp({
             });
         },
 
-        fetchAnalyticsData() {
+        async fetchAnalyticsData() {
+            if (this.loading && this.analyticsData.length > 0) return; // Prevent re-fetch if already loading initial data
             this.loading = true;
             console.log("Attempting to fetch analytics data...");
-            if (!window.db) {
-                 console.log("Firebase not initialized, using mock data.");
-                 window.db = createMockDatabase(); // Ensure mock DB is created if firebase failed
-            }
 
-            const transcriptsRef = window.db.ref('transcripts');
-            transcriptsRef.on('value', (snapshot) => {
-                const data = snapshot.val();
-                if (data) {
-                    console.log("Fetched data:", Object.keys(data).length, "entries");
-                    this.analyticsData = Object.entries(data).map(([key, value]) => ({
-                        ...value,
-                        firebaseId: key // Add Firebase key as firebaseId
-                    }));
-                    this.applyFilters(); // Apply initial filters (usually 'all')
-                } else {
-                    console.log("No data found in Firebase or mock.");
-                    this.analyticsData = [];
-                    this.filteredData = [];
+            try {
+                const database = await initializeFirebase();
+                if (!database || !database.ref) {
+                    throw new Error("Database instance is not available after initialization.");
                 }
-                 this.loading = false;
-                 this.$nextTick(() => {
-                    this.updateAnalyticsDisplay(); // Update display after data is processed
-                    this.generateAllInsights(); // Generate insights on initial load
-                 });
-            }, (error) => {
-                 console.error("Firebase read error:", error);
-                 this.loading = false;
-                 // Potentially fall back to mock data here too if needed
-                 this.analyticsData = [];
-                 this.filteredData = [];
-                 this.updateAnalyticsDisplay();
-            });
+                console.log(`Database ready. Using Firebase DB.`);
+
+                if (this.dbListenerAttached) {
+                    console.log("Listener already attached, skipping re-attachment.");
+                    this.loading = false;
+                    this.applyFilters(); // Ensure display updates with current data
+                    return;
+                }
+
+                const transcriptsRef = database.ref('transcripts');
+                const onValueChange = (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        console.log("Fetched data:", Object.keys(data).length, "entries");
+                        this.analyticsData = Object.entries(data).map(([key, value]) => ({
+                            ...value,
+                            firebaseId: key
+                        }));
+                         this.applyFilters();
+                    } else {
+                        console.log("No data found in Firebase.");
+                        this.analyticsData = [];
+                        this.filteredData = [];
+                    }
+                    this.$nextTick(() => {
+                        this.updateAnalyticsDisplay();
+                        if (!this.generatingInsights && this.filteredData.length > 0) {
+                             this.generateAllInsights(); // Auto-generate insights on first load/significant update
+                        }
+                    });
+                    this.loading = false;
+                };
+
+                const onError = (error) => {
+                     console.error("Firebase read error:", error);
+                     this.loading = false;
+                     this.analyticsData = [];
+                     this.filteredData = [];
+                     this.updateAnalyticsDisplay();
+                     alert(`Error fetching data: ${error.message}. The analytics view may be incomplete.`);
+                };
+
+                transcriptsRef.on('value', onValueChange, onError);
+                this.dbListenerAttached = true;
+                console.log("Firebase listener attached.");
+
+            } catch (error) {
+                console.error("Error initializing Firebase or attaching listener:", error);
+                this.loading = false;
+                this.analyticsData = [];
+                this.filteredData = [];
+                this.updateAnalyticsDisplay();
+                alert(`Failed to connect to the database: ${error.message}. Analytics will not load.`);
+            }
         },
 
         applyFiltersDebounced() {
             if (this.debounceTimer) clearTimeout(this.debounceTimer);
             this.debounceTimer = setTimeout(() => {
                 this.applyFilters();
-            }, 300); // 300ms debounce
+            }, 300);
         },
 
         applyFilters() {
-            this.currentPage = 1; // Reset page on filter change
+            this.currentPage = 1;
              if (!this.analyticsData || this.analyticsData.length === 0) {
                  this.filteredData = [];
+                  this.updateAnalyticsDisplay(); // Update stats etc. even if empty
                  return;
              }
             this.filteredData = this.analyticsData.filter(item => {
@@ -201,18 +235,18 @@ const analyticsApp = Vue.createApp({
                 const lifeStageMatch = this.filters.lifeStage === 'all' || item.lifeStage === this.filters.lifeStage;
                 const categoryMatch = this.filters.category === 'all' || item.customerCategory === this.filters.category;
                 const idMatch = !this.filters.uniqueId || (item.uniqueId && item.uniqueId.toLowerCase().includes(this.filters.uniqueId.toLowerCase()));
-
                 return speciesMatch && lifeStageMatch && categoryMatch && idMatch;
-            }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); // Sort by newest first
+            }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
              this.updateAnalyticsDisplay();
+             // Optionally regenerate insights on filter change if desired
+             // this.generateAllInsights();
         },
 
          updateAnalyticsDisplay() {
              this.updateBasicStats();
              this.updateKnowledgeChart();
              this.updatePetDistributionChart();
-             // Insights are generated separately
          },
 
 
@@ -260,9 +294,7 @@ const analyticsApp = Vue.createApp({
 
         viewTranscriptDetail(transcript) {
             this.detailTranscript = transcript;
-             if (this.detailModalInstance) {
-                this.detailModalInstance.show();
-             }
+             if (this.detailModalInstance) this.detailModalInstance.show();
         },
 
         openChatFromDetail() {
@@ -282,16 +314,17 @@ const analyticsApp = Vue.createApp({
                  this.chatLoading = false;
                  this.chatModalInstance.show();
                  this.scrollTranscriptChatToBottom();
+             } else {
+                 console.error("Could not find selected transcript data for chat:", this.selectedTranscriptId);
+                 alert("Error: Could not load transcript data for chat.");
              }
         },
 
         resetChatModal() {
-            // Called when modal is hidden
             this.transcriptChatHistory = [];
             this.transcriptChatInput = '';
             this.chatLoading = false;
             this.chatTargetTranscript = null;
-            // Don't reset selectedTranscriptId here, user might want to reopen
         },
 
          addTranscriptChatMessage(type, text) {
@@ -376,13 +409,12 @@ IMPORTANT: Answer the question based *ONLY* on the information found in THIS tra
                 { key: 'clinicOpportunities', prompt: this.getInsightPromptClinicOpportunities() },
             ];
 
-            // Clear previous insights
-             Object.keys(this.insights).forEach(key => this.insights[key] = '<div class="text-center text-muted p-2"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">Loading...</span></div></div>');
+            Object.keys(this.insights).forEach(key => this.insights[key] = '<div class="text-center text-muted p-2"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">Loading...</span></div></div>');
 
 
             const insightPromises = insightPrompts.map(async ({ key, prompt }) => {
                 if (!prompt) {
-                    this.insights[key] = "<p class='text-muted'>Not enough data for this insight.</p>";
+                    this.insights[key] = "<p class='text-muted'>Not enough data with current filters for this insight.</p>";
                     return;
                 };
                 try {
@@ -413,13 +445,12 @@ IMPORTANT: Answer the question based *ONLY* on the information found in THIS tra
             this.generatingInsights = false;
         },
 
-        // --- Insight Prompt Generators ---
         getInsightPromptBase() {
              const transcriptCount = this.filteredData.length;
-             const sampleSize = Math.min(transcriptCount, 20); // Limit sample size for API
+             const sampleSize = Math.min(transcriptCount, 25);
              const sampledData = this.filteredData.slice(0, sampleSize).map(t => ({
                 id: t.uniqueId || `anon_${t.firebaseId.slice(-4)}`,
-                text_snippet: t.text.substring(0, 300) + (t.text.length > 300 ? '...' : ''), // Snippet only
+                text_snippet: t.text ? t.text.substring(0, 250) + (t.text.length > 250 ? '...' : '') : '[No Text]',
                 petType: t.petType,
                 lifeStage: t.lifeStage,
                 knowledge: t.knowledgeLevel,
@@ -427,49 +458,54 @@ IMPORTANT: Answer the question based *ONLY* on the information found in THIS tra
                 pitched: t.clinicPitched
              }));
 
-            return `You are analyzing ${transcriptCount} customer transcripts (sampled below if > 20).
-Focus ONLY on the data provided. Summarize findings clearly using Markdown.
+            return `Analyze the following ${transcriptCount} customer transcripts (showing up to ${sampleSize} samples). Focus ONLY on the provided data. Summarize findings clearly using Markdown (use lists, bolding).
 
 Sampled Transcripts Overview:
+\`\`\`json
 ${JSON.stringify(sampledData, null, 1)}
+\`\`\`
 
 Filter Criteria Applied: Species=${this.filters.species}, Stage=${this.filters.lifeStage}, Category=${this.filters.category}, ID=${this.filters.uniqueId || 'N/A'}
 
-Now, answer the following specific question based *only* on the trends within these transcripts:\n`;
+Based *only* on trends within these transcripts, answer:\n`;
         },
 
         getInsightPromptCommonQuestions() {
-            return this.getInsightPromptBase() + "1. What are the top 3-5 key questions or topics customers are asking vets or companions about in these transcripts? Provide brief examples if possible.";
+            if (this.filteredData.length === 0) return null;
+            return this.getInsightPromptBase() + "1. What are the top 3-5 key questions or topics customers are asking vets or companions about? Provide brief examples if possible.";
         },
 
         getInsightPromptCustomerDifferences() {
              const foodCount = this.filteredData.filter(t => t.customerCategory === 'food' || t.customerCategory === 'both').length;
              const pharmaCount = this.filteredData.filter(t => t.customerCategory === 'pharmacy' || t.customerCategory === 'both').length;
-             if (foodCount < 3 || pharmaCount < 3) return null; // Not enough data to compare
+             if (foodCount < 2 || pharmaCount < 2) return null;
 
-            return this.getInsightPromptBase() + `2. Are the conversation topics or questions different between customers primarily interested in food vs. pharmacy? Compare their common themes or concerns based on the transcripts.`;
+            return this.getInsightPromptBase() + `2. Are the conversation topics/questions notably different between customers interested in food vs. pharmacy? Compare their common themes based on the transcripts.`;
         },
 
          getInsightPromptExcitementFactors() {
-            return this.getInsightPromptBase() + "3. Based on the language used (e.g., positive words, questions about specific features), what seems to excite pet parents the most during these interactions? Identify 2-3 key excitement factors.";
+             if (this.filteredData.length === 0) return null;
+            return this.getInsightPromptBase() + "3. Based on language used (e.g., positive words like 'great', 'love', 'excited'; questions about specific features), what seems to excite pet parents the most during these interactions? Identify 2-3 key factors.";
         },
 
         getInsightPromptEffectivePitches() {
-            return this.getInsightPromptBase() + "4. What types of vet clinic pitches (e.g., check-ups, specific treatments, wellness plans) seem mentioned or potentially effective for different pet life stages (puppy/kitten, adult, senior) or species (dog, cat) within these transcripts? Focus on what's *mentioned* or implied.";
+             if (this.filteredData.length === 0) return null;
+            return this.getInsightPromptBase() + "4. What types of vet clinic pitches (e.g., check-ups, specific treatments, wellness plans) are *mentioned* or seem potentially relevant/effective for different pet life stages (puppy/kitten, adult, senior) or species (dog, cat) within these transcripts? Focus on what's *mentioned* or implied contextually.";
         },
 
          getInsightPromptLifeStageInsights() {
+             if (this.filteredData.length === 0) return null;
             return this.getInsightPromptBase() + "5. What are the key insights or common concerns specific to different life stages (puppy/kitten, adult, senior) based *only* on these transcripts?";
         },
 
          getInsightPromptClinicOpportunities() {
+            if (this.filteredData.length === 0) return null;
             const pitchedCount = this.filteredData.filter(t => t.clinicPitched).length;
             const totalCount = this.filteredData.length;
-            return this.getInsightPromptBase() + `6. How many of these ${totalCount} transcripts explicitly mention a clinic pitch being made? (${pitchedCount} mentioned a pitch). Based on the content (e.g., discussion of health issues, senior pets, first-time owners), how many transcripts represent potential *missed opportunities* where a clinic pitch might have been relevant but wasn't mentioned? Estimate the number of missed opportunities and briefly explain why.`;
+            return this.getInsightPromptBase() + `6. Clinic Pitch Analysis: Out of ${totalCount} transcripts, ${pitchedCount} explicitly mention a clinic pitch. Based *only* on the content (e.g., health issues discussed, senior/puppy status, low owner knowledge), estimate how many transcripts represent potential *missed opportunities* where a clinic pitch might have been relevant but wasn't mentioned. Explain the types of missed opportunities identified.`;
         },
 
 
-        // --- File Upload Handling ---
         handleMultipleFileUpload(event) {
             const files = event.target.files;
             if (!files || files.length === 0) return;
@@ -484,7 +520,7 @@ Now, answer the following specific question based *only* on the trends within th
                 fileListEl.appendChild(fileItem);
                 this.processSingleFileForAnalytics(file, fileItem);
             });
-             event.target.value = ''; // Reset file input
+             event.target.value = '';
         },
 
         createFileListItem(fileName) {
@@ -523,9 +559,12 @@ Now, answer the following specific question based *only* on the trends within th
             const statusUpdater = (statusClass, message) => this.updateFileListItemStatus(fileItem, statusClass, message);
 
             try {
+                 const database = await initializeFirebase();
+                 if (!database || !database.ref) throw new Error("Database not available for saving.");
+
                 statusUpdater('status-processing', 'Processing...');
                 let transcriptText = '';
-                let uniqueId = this.filters.uniqueId || `upload_${Date.now()}@anon.com`; // Use filter ID or generate one
+                let uniqueId = `upload_${file.name}_${Date.now()}@anon.com`;
 
                 if (file.type.startsWith('audio/')) {
                     statusUpdater('status-processing', 'Transcribing...');
@@ -534,46 +573,37 @@ Now, answer the following specific question based *only* on the trends within th
                     statusUpdater('status-processing', 'Reading...');
                     transcriptText = await file.text();
                 } else {
-                     // For PDF/DOCX etc., we can't get text directly client-side easily.
-                     // We'll save metadata but text will be empty/placeholder.
-                     // A server-side processor would be needed for these.
                      statusUpdater('status-analyzing', 'Analyzing Metadata...');
                      transcriptText = `[${file.type} - Content not extracted in browser]`;
                 }
 
                 if (!transcriptText && !file.type.startsWith('audio/')) {
-                    // Only throw error for non-audio if text is empty
                      throw new Error("Could not read text content.");
                 }
 
-
                 statusUpdater('status-analyzing', 'Analyzing...');
-                const analysisData = this.analyzeTranscriptText(transcriptText); // Reuse analysis logic
+                const analysisData = this.analyzeTranscriptText(transcriptText);
 
                 const transcriptData = {
                     text: transcriptText,
-                    uniqueId: uniqueId, // Add unique identifier
+                    uniqueId: uniqueId,
                     fileName: file.name,
                     timestamp: new Date().toISOString(),
                     ...analysisData
                 };
 
                 statusUpdater('status-saving', 'Saving...');
-                if (!window.db) throw new Error("Database not available.");
 
-                const newTranscriptRef = window.db.ref('transcripts').push();
+                const newTranscriptRef = database.ref('transcripts').push();
                 await newTranscriptRef.set(transcriptData);
 
                 statusUpdater('status-completed', 'Completed');
-                 // Add to local data immediately for responsiveness, assuming 'on' will update later
-                this.analyticsData.push({...transcriptData, firebaseId: newTranscriptRef.key});
-                this.applyFilters(); // Re-apply filters
+                 // Data will be updated by the Firebase listener, no manual push needed here
 
             } catch (error) {
                 console.error("Error processing file:", file.name, error);
                 statusUpdater('status-error', `Error: ${error.message.substring(0, 30)}..`);
             } finally {
-                // Update overall feedback potentially
                  const waiting = document.querySelectorAll('.status-waiting').length;
                  const processing = document.querySelectorAll('.status-processing, .status-analyzing, .status-saving').length;
                  if (waiting === 0 && processing === 0) {
@@ -587,8 +617,11 @@ Now, answer the following specific question based *only* on the trends within th
          async transcribeAudioForAnalytics(file) {
             const formData = new FormData();
             formData.append('file', file);
-            // Assuming language is set globally or default 'auto'
-            formData.append('language', document.getElementById('languageSelect')?.value || 'auto');
+            // --- FIX: Read selected language value correctly ---
+             const selectedLanguage = document.getElementById('languageSelect')?.value || 'auto'; // Use main language select or default
+             formData.append('language', selectedLanguage);
+             console.log("Sending language to transcribe API (Analytics Upload):", selectedLanguage);
+             // --- END FIX ---
 
             const response = await fetch(this.transcribeApiUrl, { method: 'POST', body: formData });
             if (!response.ok) {
@@ -599,12 +632,11 @@ Now, answer the following specific question based *only* on the trends within th
         },
 
 
-        // --- Utility & Formatting ---
         formatTimestamp(isoString) {
             if (!isoString) return 'N/A';
             try {
                  const date = new Date(isoString);
-                 return date.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+                 return date.toLocaleString('en-US', { year: '2-digit', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' });
             } catch { return 'Invalid Date'; }
         },
 
@@ -617,7 +649,8 @@ Now, answer the following specific question based *only* on the trends within th
             switch(type) {
                 case 'dog': return 'pet-dog text-dark';
                 case 'cat': return 'pet-cat';
-                default: return 'pet-other';
+                case 'other': return 'pet-other';
+                default: return 'bg-secondary';
             }
         },
 
@@ -633,19 +666,18 @@ Now, answer the following specific question based *only* on the trends within th
         formatMarkdown(text) {
             if (!text) return '';
             let html = text;
-            // Basic Markdown conversion - enhance as needed
             html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
             html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-            html = html.replace(/^#+\s+(.*)/gm, '<h5>$1</h5>'); // Headings
-            html = html.replace(/^\s*[-*+]\s+(.*)/gm, '<li>$1</li>'); // List items
-            // Wrap consecutive list items in <ul> / <ol>
-            html = html.replace(/((<li>.*<\/li>\s*)+)/g, (match) => `<ul>${match}</ul>`);
-             // Handle numbered lists potentially (more complex regex needed)
-            html = html.replace(/\n/g, '<br>');
+            html = html.replace(/^#+\s+(.*)/gm, '<h6>$1</h6>');
+            html = html.replace(/^\s*[-*+]\s+(.*)/gm, '<li>$1</li>');
+            html = html.replace(/((<li>.*<\/li>\s*)+)/g, (match) => `<ul style="margin-bottom: 0.5rem; padding-left: 1.2rem;">${match}</ul>`);
+            html = html.replace(/\n{2,}/g, '<br><br>'); // Paragraph breaks
+            html = html.replace(/\n/g, '<br>'); // Single line breaks
+            // Clean up potential empty list wrappers
+            html = html.replace(/<ul>\s*<\/ul>/g, '');
             return html;
         },
 
-         // --- Analysis Functions (Copied/Adapted from chat.js for standalone use) ---
          analyzeTranscriptText(text) {
             if (!text || typeof text !== 'string') return {};
             return {
@@ -680,7 +712,7 @@ Now, answer the following specific question based *only* on the trends within th
             const words = text.split(/\s+/);
             const petKeywords = ['dog', 'cat', 'pet', 'puppy', 'kitten'];
             for (let i = 0; i < words.length; i++) {
-                if (/^[A-Z][a-z]{2,}$/.test(words[i]) && !['I', 'He', 'She', 'They', 'My', 'The'].includes(words[i])) {
+                 if (/^[A-Z][a-z]{2,}$/.test(words[i]) && !['I', 'He', 'She', 'They', 'My', 'The'].includes(words[i])) {
                     if (i > 0 && petKeywords.includes(words[i-1].toLowerCase().replace(/[.,!?]/g, ''))) return words[i];
                     if (i < words.length - 1 && petKeywords.includes(words[i+1].toLowerCase().replace(/[.,!?]/g, ''))) return words[i];
                 }
@@ -738,10 +770,35 @@ Now, answer the following specific question based *only* on the trends within th
 
         detectClinicPitch(text) {
             const clinicKeywords = ['vet visit', 'veterinary clinic', 'check-up', 'examination', 'schedule an appointment', 'visit the vet', 'bring (him|her|them|your pet) in', 'veterinary care', 'clinic', 'veterinarian', 'vet appointment'];
-             return clinicKeywords.some(keyword => text.toLowerCase().match(new RegExp(keyword.replace(/\s/g, '\\s*'), 'i'))); // More flexible matching
+             return clinicKeywords.some(keyword => text.toLowerCase().match(new RegExp(keyword.replace(/\s/g, '\\s*'), 'i')));
         },
+
+         forceRefreshData() {
+             console.log("Forcing data refresh...");
+             this.loading = true; // Indicate loading during refresh
+             if (this.dbListenerAttached) {
+                 initializeFirebase().then(db => {
+                     if (db && db.ref) {
+                         db.ref('transcripts').off('value');
+                         this.dbListenerAttached = false;
+                         console.log("Listener detached for refresh.");
+                         // Re-fetch immediately after detaching
+                         this.fetchAnalyticsData();
+                     } else {
+                         console.error("DB not available to detach listener for refresh.");
+                         this.loading = false;
+                     }
+                 }).catch(e => {
+                     console.error("Error getting DB instance to detach listener for refresh:", e);
+                     this.loading = false;
+                 });
+             } else {
+                 // If listener wasn't attached (e.g., initial load failed), just try fetching again
+                 this.fetchAnalyticsData();
+             }
+         }
 
     }
 }).mount('#analytics-app');
 
-window.analyticsApp = analyticsApp; // Make accessible globally
+window.analyticsApp = analyticsApp;
