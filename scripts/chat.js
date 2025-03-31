@@ -1,5 +1,5 @@
-export function chatComponent(mainApp) {
-    const { createApp, ref, onMounted, computed } = Vue;
+export function chatComponent(mainAppInterface) { // Receive interface
+    const { createApp, ref, onMounted, computed, nextTick } = Vue; // Use nextTick
 
     return createApp({
         setup() {
@@ -11,7 +11,12 @@ export function chatComponent(mainApp) {
             const isLoading = ref(false);
             const isUploading = ref(true);
             const fileFeedback = ref({ type: '', message: '' });
-            const chatBodyRef = ref(null);
+            const chatBodyRef = ref(null); // Template ref for scrolling
+
+            // Access functions from interface
+            const callGeminiAPI = mainAppInterface.callGeminiAPI;
+            // Access TRANSCRIBE_API_ENDPOINT globally if needed, or pass via interface
+            // Assuming TRANSCRIBE_API_ENDPOINT is global from config.js
 
             const addMessage = (sender, text) => {
                 messages.value.push({ sender, text, id: Date.now() + Math.random() });
@@ -28,8 +33,7 @@ export function chatComponent(mainApp) {
             }
 
             const scrollToBottom = () => {
-                // Use nextTick to wait for DOM update
-                Vue.nextTick(() => {
+                nextTick(() => { // Use nextTick
                     const chatBody = chatBodyRef.value;
                     if (chatBody) {
                         chatBody.scrollTop = chatBody.scrollHeight;
@@ -40,12 +44,15 @@ export function chatComponent(mainApp) {
              const formatMarkdown = (text) => {
                  if (!text) return '';
                  let formattedText = text;
+                 // Basic Markdown replacements
                  formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // Bold
                  formattedText = formattedText.replace(/\*(.*?)\*/g, '<em>$1</em>');     // Italics
                  formattedText = formattedText.replace(/`([^`]+)`/g, '<code>$1</code>');   // Inline code
-                 formattedText = formattedText.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>'); // Code blocks
-                 formattedText = formattedText.replace(/^\s*-\s+(.*)/gm, '<li>$1</li>'); // Basic lists (needs wrapping ul) - simplified
-                 formattedText = formattedText.replace(/(\<li.*\>.*?\<\/li\>)/gs, '<ul class="list-unstyled ps-3 mt-2">$1</ul>') // Wrap lists
+                 // Basic list handling (requires wrapping logic later or ensure input format)
+                 formattedText = formattedText.replace(/^\s*-\s+(.*)/gm, '<li>$1</li>');
+                 formattedText = formattedText.replace(/^\s*\*\s+(.*)/gm, '<li>$1</li>'); // Also handle '*' lists
+                 // Attempt to wrap consecutive LIs (might need refinement)
+                 formattedText = formattedText.replace(/(<li>.*?<\/li>\s*)+/gs, (match) => `<ul class="list-unstyled ps-3 mt-2">${match.replace(/<\/li>\s*<li>/g, '</li><li>')}</ul>`);
                  formattedText = formattedText.replace(/\n/g, '<br>'); // Newlines
                  return formattedText;
             };
@@ -56,7 +63,13 @@ export function chatComponent(mainApp) {
                 const allowedTypes = ['text/plain', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'audio/mpeg', 'audio/mp3'];
                 const maxSize = 15 * 1024 * 1024; // 15MB
 
-                if (!allowedTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.txt') && !file.name.toLowerCase().endsWith('.mp3') ) {
+                // More robust type checking
+                const fileExtension = file.name.split('.').pop().toLowerCase();
+                const isAllowedExtension = ['txt', 'pdf', 'doc', 'docx', 'mp3'].includes(fileExtension);
+                const isAllowedMime = allowedTypes.includes(file.type);
+
+                // Allow if either MIME type matches or extension matches (for cases where MIME might be generic)
+                if (!isAllowedMime && !isAllowedExtension) {
                    setFileFeedback('error', 'Invalid file type. Please upload .txt, .pdf, .doc, .docx, or .mp3');
                     return;
                 }
@@ -69,36 +82,37 @@ export function chatComponent(mainApp) {
                 currentFileName.value = file.name;
                 setFileFeedback('info', `Processing ${file.name}...`);
                 isLoading.value = true;
+                isUploading.value = true; // Keep overlay until success/failure is certain
                 messages.value = []; // Clear previous chat
 
                 try {
-                    if (file.type.startsWith('audio/')) {
+                    if (file.type.startsWith('audio/') || fileExtension === 'mp3') {
                         await transcribeAndProcess(file);
-                    } else if (file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt')) {
+                    } else if (file.type === 'text/plain' || fileExtension === 'txt') {
                         const reader = new FileReader();
                         reader.onload = (e) => {
                             currentTranscript.value = e.target.result;
                             finishProcessing();
                         };
-                        // *** CORRECTED LINE ***
-                        reader.onerror = () => { throw new Error("Error reading text file."); };
+                        reader.onerror = (e) => {
+                            console.error("FileReader error:", e);
+                            throw new Error("Error reading text file.");
+                        };
                         reader.readAsText(file);
                     } else {
                         // Handle non-text, non-audio files (like PDF, DOCX)
-                        // For now, just indicate analysis is limited
-                        // In a real app, you might use server-side extraction for these
-                        currentTranscript.value = `[Content of file '${file.name}' (${file.type}) - analysis will focus on metadata and user queries.]`;
-                         finishProcessing("File type non-text; basic analysis available.");
+                        currentTranscript.value = `[File: ${file.name}, Type: ${file.type || fileExtension}. Content not directly readable in browser. Analysis based on metadata and queries.]`;
+                        finishProcessing("File type requires server-side processing for full content analysis (basic chat available).");
                     }
                 } catch (error) {
                     console.error("Error handling file upload:", error);
                     setFileFeedback('error', `Error processing file: ${error.message}`);
-                    resetChatState(); // Reset to allow re-upload attempt
-                    // Let the user know processing failed but keep UI interactive
+                    // Reset state but keep upload UI visible
                     isLoading.value = false;
-                    isUploading.value = true; // Go back to upload state on error
-                } finally {
-                   // isLoading state is managed within the try/catch/transcribe blocks now
+                    isUploading.value = true;
+                    currentFile.value = null;
+                    currentFileName.value = '';
+                    // Don't clear feedback here
                 }
             };
 
@@ -106,16 +120,24 @@ export function chatComponent(mainApp) {
                  setFileFeedback('info', 'Transcribing audio... This may take a moment.');
                  const formData = new FormData();
                  formData.append('file', file);
-                 formData.append('language', 'auto'); // Or get from a UI element if you add one
+                 formData.append('language', 'auto');
 
                  try {
+                    // TRANSCRIBE_API_ENDPOINT global from config.js
                     const response = await fetch(TRANSCRIBE_API_ENDPOINT, {
                         method: 'POST',
                         body: formData
                     });
                     if (!response.ok) {
                         const errorText = await response.text();
-                        throw new Error(`Transcription failed: ${response.status} ${errorText}`);
+                        console.error(`Transcription API Error (${response.status}): ${errorText}`);
+                        // Try to parse error from AssemblyAI if possible
+                         let detail = errorText;
+                         try {
+                            const errJson = JSON.parse(errorText);
+                            detail = errJson.error || errorText;
+                         } catch (e) {/* ignore parse error */}
+                        throw new Error(`Transcription failed: ${detail}`);
                     }
                     const transcript = await response.text();
                     currentTranscript.value = transcript;
@@ -124,19 +146,18 @@ export function chatComponent(mainApp) {
                  } catch (error) {
                      console.error("Transcription error:", error);
                      setFileFeedback('error', `Transcription failed: ${error.message}`);
-                     // Reset crucial state but keep upload active
+                     // Reset state on transcription failure, keep upload UI
+                     isLoading.value = false;
+                     isUploading.value = true;
                      currentFile.value = null;
                      currentFileName.value = '';
-                     isLoading.value = false;
-                     isUploading.value = true; // Ensure user can try again
-                     // Don't call resetChatState fully as it clears feedback
                  }
             };
 
 
              const finishProcessing = (successMessage = 'Transcript ready!') => {
                 setFileFeedback('success', successMessage);
-                isUploading.value = false;
+                isUploading.value = false; // Hide overlay
                 isLoading.value = false;
                 addMessage('bot', `Hi there! I've processed '${currentFileName.value}'. Ask me anything about its content.`);
             };
@@ -147,7 +168,7 @@ export function chatComponent(mainApp) {
 
              const sendMessage = async () => {
                 const messageText = userInput.value.trim();
-                if (!messageText || isLoading.value) return;
+                if (!messageText || isLoading.value || isUploading.value) return; // Don't send if uploading
 
                 addMessage('user', messageText);
                 userInput.value = '';
@@ -158,7 +179,7 @@ export function chatComponent(mainApp) {
                 Transcript File: ${currentFileName.value || 'Unknown'}
                 Transcript Content (use this as primary context):
                 ---
-                ${currentTranscript.value}
+                ${currentTranscript.value || '[No transcript content loaded]'}
                 ---
                 User's Question: ${messageText}
 
@@ -170,9 +191,9 @@ export function chatComponent(mainApp) {
                 - Format your response clearly (e.g., use bullet points for lists if appropriate).`;
 
                 try {
-                    const botResponse = await mainApp.callGeminiAPI(prompt);
+                    const botResponse = await callGeminiAPI(prompt); // Use interface function
                     removeTypingIndicator();
-                    addMessage('bot', formatMarkdown(botResponse));
+                    addMessage('bot', botResponse); // Let formatMarkdown handle formatting in template
                 } catch (error) {
                      removeTypingIndicator();
                      addMessage('bot', `Sorry, I encountered an error trying to process your request: ${error.message}`);
@@ -189,10 +210,10 @@ export function chatComponent(mainApp) {
                 currentFileName.value = '';
                 currentFile.value = null;
                 isLoading.value = false;
-                isUploading.value = true;
+                isUploading.value = true; // Go back to upload state
                 setFileFeedback('', ''); // Clear feedback
                 const fileInput = document.getElementById('chatFileInput');
-                if(fileInput) fileInput.value = ''; // Reset file input
+                if(fileInput) fileInput.value = ''; // Reset file input visually
             }
 
             const handleFileChange = (event) => {
@@ -203,8 +224,9 @@ export function chatComponent(mainApp) {
             const handleDrop = (event) => {
                  event.preventDefault();
                  event.currentTarget.classList.remove('drag-over');
-                 const file = event.dataTransfer.files[0];
-                 handleFileUpload(file);
+                 if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+                    handleFileUpload(event.dataTransfer.files[0]);
+                 }
             };
 
             const handleDragOver = (event) => {
@@ -231,17 +253,16 @@ export function chatComponent(mainApp) {
                 handleDragLeave,
                 resetChatState,
                 chatBodyRef,
-                formatMarkdown // Ensure formatMarkdown is returned if used in template (it isn't currently, but good practice)
+                formatMarkdown // Return for use in template
             };
         },
-        // Template remains the same as before
         template: `
             <div class="card chat-card h-100">
               <div class="chat-area">
                  <div v-if="isUploading" class="upload-overlay"
-                      @drop.prevent="handleDrop"
-                      @dragover.prevent="handleDragOver"
-                      @dragleave.prevent="handleDragLeave">
+                      @drop="handleDrop"
+                      @dragover="handleDragOver"
+                      @dragleave="handleDragLeave">
                    <div class="upload-container">
                      <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
                      <h5>Upload Transcript or Audio</h5>
@@ -251,13 +272,15 @@ export function chatComponent(mainApp) {
                      </label>
                      <input type="file" id="chatFileInput" @change="handleFileChange" class="d-none" accept=".txt,.pdf,.doc,.docx,.mp3,audio/mpeg,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain">
                       <div class="file-info">{{ currentFileName || 'Max 15MB' }}</div>
-                       <div v-if="fileFeedback.message" :class="['file-feedback', fileFeedback.type]">
+                       <!-- Feedback Area -->
+                       <div v-if="fileFeedback.message" :class="['file-feedback', fileFeedback.type, 'mt-3']">
                          {{ fileFeedback.message }}
                          <div v-if="isLoading && fileFeedback.type === 'info'" class="spinner-border spinner-border-sm ms-2" role="status"></div>
                        </div>
                    </div>
                  </div>
 
+                 <!-- Chat Interface (shown when not uploading) -->
                  <div v-else class="d-flex flex-column h-100">
                     <div class="chat-header">
                         <h5>Transcript Assistant: {{ currentFileName }}</h5>
@@ -266,30 +289,37 @@ export function chatComponent(mainApp) {
                         </button>
                     </div>
                     <div class="chat-body" ref="chatBodyRef">
+                        <!-- Messages -->
                         <div v-for="message in messages" :key="message.id" :class="['message', message.sender === 'user' ? 'user-message' : '']">
-                            <div v-if="message.type === 'typing'" class="d-flex align-items-center">
+                            <!-- Typing Indicator -->
+                            <div v-if="message.type === 'typing'" class="d-flex align-items-center w-100">
                                 <div class="avatar bot-avatar"><i class="fas fa-robot"></i></div>
-                                <div class="message-content typing-indicator">
+                                <div class="message-content typing-indicator ms-2">
                                     <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
                                 </div>
                             </div>
+                            <!-- Regular Message -->
                             <template v-else>
                                 <div :class="['avatar', message.sender === 'user' ? 'user-avatar' : 'bot-avatar']">
                                     <i :class="['fas', message.sender === 'user' ? 'fa-user' : 'fa-robot']"></i>
                                 </div>
                                 <div class="message-content">
-                                    {/* Use v-html for formatted bot messages */}
+                                    <!-- Use v-html for formatted bot messages -->
                                     <div class="message-text" v-if="message.sender === 'bot'" v-html="formatMarkdown(message.text)"></div>
-                                    {/* Display user messages directly */}
+                                    <!-- Display user messages directly (avoids potential XSS if user input had HTML) -->
                                     <div class="message-text" v-else>{{ message.text }}</div>
                                 </div>
                             </template>
                         </div>
+                         <!-- Show feedback in chat area if processing failed AFTER upload screen -->
+                        <div v-if="!isUploading && fileFeedback.type === 'error'" :class="['file-feedback', fileFeedback.type, 'mt-auto', 'mx-auto', 'p-2', 'mb-2']" style="max-width: 80%;">
+                            {{ fileFeedback.message }}
+                        </div>
                     </div>
                     <div class="chat-footer">
                         <div class="chat-input-container">
-                        <input type="text" class="chat-input" v-model="userInput" @keyup.enter="sendMessage" placeholder="Ask about your transcript..." :disabled="isLoading">
-                        <button @click="sendMessage" class="chat-submit" :disabled="isLoading || !userInput.trim()">
+                        <input type="text" class="chat-input" v-model="userInput" @keyup.enter="sendMessage" placeholder="Ask about your transcript..." :disabled="isLoading || isUploading">
+                        <button @click="sendMessage" class="chat-submit" :disabled="isLoading || isUploading || !userInput.trim()">
                             <i class="fas fa-paper-plane"></i>
                         </button>
                         </div>

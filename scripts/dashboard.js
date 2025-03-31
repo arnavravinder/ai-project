@@ -1,4 +1,4 @@
-export function dashboardComponent(mainApp) {
+export function dashboardComponent(mainAppInterface) { // Receive interface
     const { createApp, ref, onMounted, computed } = Vue;
 
     return createApp({
@@ -7,33 +7,47 @@ export function dashboardComponent(mainApp) {
             const loading = ref(true);
             const error = ref(null);
 
+            // Access db via interface
+            const db = mainAppInterface.getFirebaseDb(); // Use the getter
+
             const fetchDashboardData = async () => {
                 loading.value = true;
                 error.value = null;
-                if (!mainApp.db) {
+                if (!db) { // Check if db is available
                     error.value = "Database connection not available.";
                     loading.value = false;
+                    transcriptCount.value = 0; // Ensure count is 0 on error
                     return;
                 }
                 try {
-                    const snapshot = await mainApp.db.ref('transcripts').once('value');
+                    // Use the actual db reference
+                    const snapshot = await db.ref('transcripts').once('value');
                     const data = snapshot.val();
                     transcriptCount.value = data ? Object.keys(data).length : 0;
                 } catch (err) {
                     console.error("Error fetching dashboard data:", err);
                     error.value = "Failed to load dashboard data.";
-                    transcriptCount.value = 0;
+                    transcriptCount.value = 0; // Reset count on error
                 } finally {
                     loading.value = false;
                 }
             };
 
             const goToChat = () => {
-                mainApp.changeView('chat');
+                // Call changeView from the parent app if needed, or handle directly
+                 if (typeof mainAppInterface.changeView === 'function') {
+                    mainAppInterface.changeView('chat');
+                 } else {
+                    console.warn("changeView function not passed to dashboard component");
+                 }
             };
 
             const goToAnalytics = () => {
-                mainApp.changeView('analytics');
+                 if (typeof mainAppInterface.changeView === 'function') {
+                    mainAppInterface.changeView('analytics');
+                 } else {
+                     console.warn("changeView function not passed to dashboard component");
+                 }
             };
 
             onMounted(() => {
@@ -64,20 +78,20 @@ export function dashboardComponent(mainApp) {
                  <div v-else-if="error" class="alert alert-danger" role="alert">
                   {{ error }}
                 </div>
-                <div v-else class="row g-4">
-                  <div class="col-md-6">
-                    <div class="metric-card h-100">
+                <div v-else class="row g-4 align-items-stretch"> {/* Use align-items-stretch */}
+                  <div class="col-md-6 d-flex"> {/* Added d-flex */}
+                    <div class="metric-card w-100 h-100"> {/* Use w-100 */}
                       <div class="metric-icon"><i class="fas fa-file-alt"></i></div>
                       <div class="metric-value">{{ transcriptCount }}</div>
                       <div class="metric-label">Total Transcripts Analyzed</div>
                     </div>
                   </div>
-                  <div class="col-md-6">
-                     <div class="metric-card h-100 d-flex flex-column justify-content-center">
+                  <div class="col-md-6 d-flex"> {/* Added d-flex */}
+                     <div class="metric-card w-100 h-100 d-flex flex-column justify-content-center"> {/* Use w-100 */}
                        <div class="metric-icon"><i class="fas fa-lightbulb"></i></div>
                        <div class="metric-value">Insights</div>
                        <div class="metric-label">Explore aggregated data and trends</div>
-                       <button @click="goToAnalytics" class="btn btn-sm btn-outline-custom mt-3">View Analytics</button>
+                       <button @click="goToAnalytics" class="btn btn-sm btn-outline-custom mt-3 mx-auto" style="max-width: 150px;">View Analytics</button> {/* Centered button */}
                      </div>
                   </div>
                    <div class="col-12 cta-section">

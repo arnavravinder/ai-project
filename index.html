@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="styles/styles.css">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg"> <!-- Make sure this file exists -->
 </head>
 <body>
 
@@ -25,7 +25,6 @@
     <!-- Header -->
     <header class="app-header">
       <div class="brand">
-        <!-- Ensure assets/favicon.svg exists -->
         <img src="assets/favicon.svg" alt="SupertailsAI Logo" class="brand-logo">
         <h1>SupertailsAI</h1>
       </div>
@@ -50,8 +49,7 @@
         <p>Loading Application...</p>
       </div>
 
-      <!-- Main Content Area (Scrollable) - Added ref="mainScrollContainer" -->
-      <!-- Vue controls the content inside this div via v-show -->
+      <!-- Main Content Wrapper (Scrollable) - Added ref -->
       <div v-else class="w-100 h-100 overflow-auto" ref="mainScrollContainer">
         <!-- Error Display -->
         <div v-if="error" class="container pt-3">
