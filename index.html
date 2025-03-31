@@ -98,20 +98,39 @@
             </div>
 
             <div id="chatMessages" class="chat-body custom-scrollbar">
-              <div class="message">
-                <div class="avatar bot-avatar">
-                  <i class="fas fa-robot"></i>
+                <!-- Messages will be rendered here by Vue -->
+                <div v-for="(msg, index) in chatHistory" :key="index" class="message" :class="{'user-message': msg.type === 'user'}">
+                     <div class="avatar" :class="msg.type === 'user' ? 'user-avatar' : 'bot-avatar'">
+                         <i :class="['fas', msg.type === 'user' ? 'fa-user' : 'fa-robot']"></i>
+                     </div>
+                     <div class="message-content">
+                         <div class="message-text" v-html="formatMarkdown(msg.text)"></div>
+                     </div>
                 </div>
-                <div class="message-content">
-                  <div class="message-text">Hi there! Upload a transcript or audio file, or paste text to begin. Then, ask me questions about it.</div>
+                 <div v-if="isProcessing" class="message" id="typingIndicator">
+                     <div class="avatar bot-avatar"><i class="fas fa-robot"></i></div>
+                     <div class="message-content"><div class="typing-indicator"><span></span><span></span><span></span></div></div>
                 </div>
-              </div>
             </div>
 
             <div class="chat-footer">
+                <!-- Predefined Prompt Buttons -->
+                <div id="predefinedPrompts" class="predefined-prompts mb-2">
+                    <button @click="sendPredefinedPrompt('knowledge')" class="btn btn-outline-secondary btn-sm" :disabled="!currentTranscript || isProcessing">
+                        <i class="fas fa-brain"></i> Knowledge Score
+                    </button>
+                    <button @click="sendPredefinedPrompt('diet')" class="btn btn-outline-secondary btn-sm" :disabled="!currentTranscript || isProcessing">
+                        <i class="fas fa-bone"></i> Analyze Diet
+                    </button>
+                    <button @click="sendPredefinedPrompt('summary')" class="btn btn-outline-secondary btn-sm" :disabled="!currentTranscript || isProcessing">
+                        <i class="fas fa-list-alt"></i> Summarize Call
+                    </button>
+                 </div>
+                 <!-- End Predefined Prompt Buttons -->
+
               <div class="input-group">
-                <input type="text" class="form-control chat-input" id="userInput" placeholder="Ask about the current transcript...">
-                <button class="btn btn-primary chat-submit" id="sendMessageBtn">
+                <input type="text" class="form-control chat-input" id="userInput" placeholder="Ask about the current transcript..." v-model="userInputText" @keypress.enter="sendMessage" :disabled="isProcessing || !currentTranscript">
+                <button class="btn btn-primary chat-submit" id="sendMessageBtn" @click="sendMessage" :disabled="isProcessing || !currentTranscript || !userInputText.trim()">
                   <i class="fas fa-paper-plane"></i>
                 </button>
               </div>
@@ -120,311 +139,314 @@
         </div>
       </div>
 
+      <!-- Analytics View remains the same -->
       <div id="analytics-view" class="container-fluid view-container">
-        <div id="analytics-app" class="card h-100">
-            <h2>Pet Parent Analytics Dashboard</h2>
+          <!-- Existing Analytics HTML -->
+           <div id="analytics-app" class="card h-100">
+               <h2>Pet Parent Analytics Dashboard</h2>
 
-            <div class="row g-2 mb-3 analytics-controls align-items-end">
-                <div class="col-md-2">
-                    <label for="filterSpecies" class="form-label form-label-sm">Species:</label>
-                    <select id="filterSpecies" class="form-select form-select-sm filter-select" v-model="filters.species" @change="applyFilters">
-                        <option value="all">All</option>
-                        <option value="dog">Dog</option>
-                        <option value="cat">Cat</option>
-                        <option value="other">Other</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label for="filterLifeStage" class="form-label form-label-sm">Life Stage:</label>
-                    <select id="filterLifeStage" class="form-select form-select-sm filter-select" v-model="filters.lifeStage" @change="applyFilters">
-                        <option value="all">All</option>
-                        <option value="puppy">Puppy/Kitten</option>
-                        <option value="adult">Adult</option>
-                        <option value="senior">Senior</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label for="filterCategory" class="form-label form-label-sm">Category:</label>
-                    <select id="filterCategory" class="form-select form-select-sm filter-select" v-model="filters.category" @change="applyFilters">
-                        <option value="all">All</option>
-                        <option value="food">Food</option>
-                        <option value="pharmacy">Pharmacy</option>
-                        <option value="both">Both</option>
-                    </select>
-                </div>
-                 <div class="col-md-3">
-                    <label for="filterId" class="form-label form-label-sm">Identifier:</label>
-                    <input type="text" id="filterId" class="form-control form-control-sm filter-select" placeholder="Email or ID..." v-model="filters.uniqueId" @input="applyFiltersDebounced">
-                </div>
-                <div class="col-md-3">
-                    <label for="analyticsFileInput" class="form-label form-label-sm">Upload Transcripts:</label>
-                     <div class="input-group input-group-sm">
-                         <input type="file" id="analyticsFileInput" class="form-control form-control-sm" accept=".txt,.doc,.docx,.pdf,.mp3,.wav,.m4a" multiple @change="handleMultipleFileUpload">
-                         <span class="input-group-text"><i class="fas fa-upload"></i></span>
-                     </div>
-                     <div id="analyticsFileList" class="file-list custom-scrollbar mt-1"></div>
-                     <div id="analyticsFeedback" class="file-feedback small mt-1"></div>
-                </div>
-            </div>
-
-            <div class="analytics-dashboard custom-scrollbar">
-                <div v-if="loading" class="text-center my-5">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="text-muted mt-2">Loading Analytics Data...</p>
-                </div>
-
-                <div v-else>
-                    <div class="row g-3 mb-3">
-                        <div class="col-lg-6">
-                             <div class="stats-container">
-                                <div class="stat-card">
-                                    <div class="stat-icon"><i class="fas fa-file-alt"></i></div>
-                                    <div class="stat-value">{{ stats.total }}</div>
-                                    <div class="stat-label">Total Transcripts</div>
-                                </div>
-                                <div class="stat-card">
-                                    <div class="stat-icon"><i class="fas fa-dog"></i></div>
-                                    <div class="stat-value">{{ stats.dogs }}</div>
-                                    <div class="stat-label">Dog Owners</div>
-                                </div>
-                                <div class="stat-card">
-                                    <div class="stat-icon"><i class="fas fa-cat"></i></div>
-                                    <div class="stat-value">{{ stats.cats }}</div>
-                                    <div class="stat-label">Cat Owners</div>
-                                </div>
-                                <div class="stat-card">
-                                    <div class="stat-icon"><i class="fas fa-clinic-medical"></i></div>
-                                    <div class="stat-value">{{ stats.clinicPitches }}</div>
-                                    <div class="stat-label">Clinic Pitched</div>
-                                </div>
-                            </div>
+               <div class="row g-2 mb-3 analytics-controls align-items-end">
+                   <div class="col-md-2">
+                       <label for="filterSpecies" class="form-label form-label-sm">Species:</label>
+                       <select id="filterSpecies" class="form-select form-select-sm filter-select" v-model="filters.species" @change="applyFilters">
+                           <option value="all">All</option>
+                           <option value="dog">Dog</option>
+                           <option value="cat">Cat</option>
+                           <option value="other">Other</option>
+                       </select>
+                   </div>
+                   <div class="col-md-2">
+                       <label for="filterLifeStage" class="form-label form-label-sm">Life Stage:</label>
+                       <select id="filterLifeStage" class="form-select form-select-sm filter-select" v-model="filters.lifeStage" @change="applyFilters">
+                           <option value="all">All</option>
+                           <option value="puppy">Puppy/Kitten</option>
+                           <option value="adult">Adult</option>
+                           <option value="senior">Senior</option>
+                       </select>
+                   </div>
+                   <div class="col-md-2">
+                       <label for="filterCategory" class="form-label form-label-sm">Category:</label>
+                       <select id="filterCategory" class="form-select form-select-sm filter-select" v-model="filters.category" @change="applyFilters">
+                           <option value="all">All</option>
+                           <option value="food">Food</option>
+                           <option value="pharmacy">Pharmacy</option>
+                           <option value="both">Both</option>
+                       </select>
+                   </div>
+                    <div class="col-md-3">
+                       <label for="filterId" class="form-label form-label-sm">Identifier:</label>
+                       <input type="text" id="filterId" class="form-control form-control-sm filter-select" placeholder="Email or ID..." v-model="filters.uniqueId" @input="applyFiltersDebounced">
+                   </div>
+                   <div class="col-md-3">
+                       <label for="analyticsFileInput" class="form-label form-label-sm">Upload Transcripts:</label>
+                        <div class="input-group input-group-sm">
+                            <input type="file" id="analyticsFileInput" class="form-control form-control-sm" accept=".txt,.doc,.docx,.pdf,.mp3,.wav,.m4a" multiple @change="handleMultipleFileUpload">
+                            <span class="input-group-text"><i class="fas fa-upload"></i></span>
                         </div>
-                         <div class="col-lg-3">
-                             <div class="chart-card">
-                                <h6>Knowledge Levels</h6>
-                                <div class="chart-container-knowledge">
-                                    <div class="chart-bar high">
-                                        <div :style="{ width: knowledgeLevels.high + '%' }" class="chart-fill"></div>
-                                        <div class="chart-label">High</div>
-                                        <div class="chart-value">{{ knowledgeLevels.high }}%</div>
-                                    </div>
-                                     <div class="chart-bar medium">
-                                        <div :style="{ width: knowledgeLevels.medium + '%' }" class="chart-fill"></div>
-                                        <div class="chart-label">Medium</div>
-                                        <div class="chart-value">{{ knowledgeLevels.medium }}%</div>
-                                    </div>
-                                     <div class="chart-bar low">
-                                        <div :style="{ width: knowledgeLevels.low + '%' }" class="chart-fill"></div>
-                                        <div class="chart-label">Low</div>
-                                        <div class="chart-value">{{ knowledgeLevels.low }}%</div>
-                                    </div>
-                                </div>
-                            </div>
-                         </div>
-                         <div class="col-lg-3">
-                            <div class="chart-card">
-                                <h6>Pet Distribution</h6>
-                                <div class="chart-canvas-container">
-                                    <canvas id="petDistributionChartCanvas"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                        <div id="analyticsFileList" class="file-list custom-scrollbar mt-1"></div>
+                        <div id="analyticsFeedback" class="file-feedback small mt-1"></div>
+                   </div>
+               </div>
 
-                     <div class="mb-3">
-                        <div class="section-header">
-                            <h5>Transcript Data</h5>
-                             <button class="btn btn-sm btn-outline-primary" @click="showChatModal = true" :disabled="!selectedTranscriptId">
-                                <i class="fas fa-comments"></i> Chat About Selected
-                             </button>
-                        </div>
-                        <div class="table-responsive transcript-table custom-scrollbar">
-                             <table class="table table-sm table-hover align-middle">
-                                <thead>
-                                    <tr>
-                                        <th></th>
-                                        <th>ID / Email</th>
-                                        <th>Pet Name</th>
-                                        <th>Type</th>
-                                        <th>Stage</th>
-                                        <th>Knowledge</th>
-                                        <th>Category</th>
-                                        <th>Clinic Pitched</th>
-                                        <th>Timestamp</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="petsTableBody">
-                                    <tr v-if="paginatedData.length === 0">
-                                      <td colspan="10" class="text-center text-muted py-3">No matching transcripts found.</td>
-                                    </tr>
-                                    <tr v-for="item in paginatedData" :key="item.firebaseId" :class="{ 'table-active': selectedTranscriptId === item.firebaseId }" @click="selectTranscript(item.firebaseId)">
-                                        <td><input type="radio" name="selectedTranscript" :value="item.firebaseId" v-model="selectedTranscriptId"></td>
-                                        <td>{{ item.uniqueId || 'N/A' }}</td>
-                                        <td>{{ item.petName }}</td>
-                                        <td><span class="badge" :class="getPetTypeBadge(item.petType)">{{ formatText(item.petType) }}</span></td>
-                                        <td><span class="badge bg-secondary">{{ formatText(item.lifeStage) }}</span></td>
-                                        <td><span class="badge" :class="getKnowledgeBadge(item.knowledgeLevel)">{{ formatText(item.knowledgeLevel) }}</span></td>
-                                        <td><span class="badge bg-info text-dark">{{ formatText(item.customerCategory) }}</span></td>
-                                        <td><i :class="['fas', item.clinicPitched ? 'fa-check-circle text-success' : 'fa-times-circle text-danger']"></i></td>
-                                        <td>{{ formatTimestamp(item.timestamp) }}</td>
-                                        <td>
-                                           <button class="btn btn-outline-info btn-sm py-0 px-1" @click.stop="viewTranscriptDetail(item)">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <nav v-if="totalPages > 1" aria-label="Transcript pagination" class="mt-2">
-                          <ul class="pagination pagination-sm justify-content-center">
-                            <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                              <a class="page-link" href="#" @click.prevent="changePage(currentPage - 1)">&laquo;</a>
-                            </li>
-                            <li class="page-item" v-for="page in paginationRange" :key="page" :class="{ active: currentPage === page }">
-                              <a v-if="page !== '...'" class="page-link" href="#" @click.prevent="changePage(page)">{{ page }}</a>
-                              <span v-else class="page-link">...</span>
-                            </li>
-                            <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                              <a class="page-link" href="#" @click.prevent="changePage(currentPage + 1)">&raquo;</a>
-                            </li>
-                          </ul>
-                        </nav>
-                     </div>
+               <div class="analytics-dashboard custom-scrollbar">
+                   <div v-if="loading" class="text-center my-5">
+                       <div class="spinner-border text-primary" role="status">
+                           <span class="visually-hidden">Loading...</span>
+                       </div>
+                       <p class="text-muted mt-2">Loading Analytics Data...</p>
+                   </div>
 
-                    <div class="analytics-section full-width">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                          <h5 class="mb-0">Key Insights (Generated by AI)</h5>
-                          <button class="btn btn-sm btn-primary" @click="generateAllInsights" :disabled="generatingInsights">
-                             <span v-if="generatingInsights" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                             {{ generatingInsights ? 'Generating...' : 'Refresh Insights' }}
-                           </button>
-                        </div>
-                        <div class="insights-container">
-                            <ul class="nav nav-tabs nav-fill nav-justified insight-tabs" id="insightTab" role="tablist">
-                              <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="common-questions-tab" data-bs-toggle="tab" data-bs-target="#commonQuestionsPanel" type="button" role="tab">Common Qs</button>
-                              </li>
-                              <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="customer-diff-tab" data-bs-toggle="tab" data-bs-target="#customerDifferencesPanel" type="button" role="tab">Food vs Pharma</button>
-                              </li>
-                              <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="excitement-tab" data-bs-toggle="tab" data-bs-target="#excitementFactorsPanel" type="button" role="tab">Excitement</button>
-                              </li>
-                              <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="pitches-tab" data-bs-toggle="tab" data-bs-target="#effectivePitchesPanel" type="button" role="tab">Pitches</button>
-                              </li>
-                               <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="lifestage-tab" data-bs-toggle="tab" data-bs-target="#lifeStageInsightsPanel" type="button" role="tab">Life Stage</button>
-                              </li>
-                               <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="clinic-opp-tab" data-bs-toggle="tab" data-bs-target="#clinicOpportunitiesPanel" type="button" role="tab">Clinic Opps</button>
-                              </li>
-                            </ul>
-                            <div class="tab-content insight-content" id="insightTabContent">
-                              <div class="tab-pane fade show active insight-panel" id="commonQuestionsPanel" role="tabpanel">
-                                <div v-html="insights.commonQuestions || '<p class=text-muted>Click Refresh Insights...</p>'" class="insight-data custom-scrollbar"></div>
-                              </div>
-                              <div class="tab-pane fade insight-panel" id="customerDifferencesPanel" role="tabpanel">
-                                <div v-html="insights.customerDifferences || '<p class=text-muted>Click Refresh Insights...</p>'" class="insight-data custom-scrollbar"></div>
-                              </div>
-                              <div class="tab-pane fade insight-panel" id="excitementFactorsPanel" role="tabpanel">
-                               <div v-html="insights.excitementFactors || '<p class=text-muted>Click Refresh Insights...</p>'" class="insight-data custom-scrollbar"></div>
-                              </div>
-                              <div class="tab-pane fade insight-panel" id="effectivePitchesPanel" role="tabpanel">
-                                <div v-html="insights.effectivePitches || '<p class=text-muted>Click Refresh Insights...</p>'" class="insight-data custom-scrollbar"></div>
-                              </div>
-                               <div class="tab-pane fade insight-panel" id="lifeStageInsightsPanel" role="tabpanel">
-                                <div v-html="insights.lifeStageInsights || '<p class=text-muted>Click Refresh Insights...</p>'" class="insight-data custom-scrollbar"></div>
-                              </div>
-                               <div class="tab-pane fade insight-panel" id="clinicOpportunitiesPanel" role="tabpanel">
-                                <div v-html="insights.clinicOpportunities || '<p class=text-muted>Click Refresh Insights...</p>'" class="insight-data custom-scrollbar"></div>
-                              </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-             <div class="modal fade" id="transcriptDetailModal" tabindex="-1" aria-labelledby="transcriptDetailModalLabel" aria-hidden="true">
-              <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                <div class="modal-content bg-dark text-light">
-                  <div class="modal-header border-secondary">
-                    <h5 class="modal-title" id="transcriptDetailModalLabel">Transcript Details: {{ detailTranscript?.petName }}</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                  </div>
-                  <div class="modal-body">
-                    <div v-if="detailTranscript">
-                         <p><strong>Identifier:</strong> {{ detailTranscript.uniqueId || 'N/A' }}</p>
-                         <p><strong>Pet Name:</strong> {{ detailTranscript.petName }}</p>
-                         <p><strong>Pet Type:</strong> <span class="badge" :class="getPetTypeBadge(detailTranscript.petType)">{{ formatText(detailTranscript.petType) }}</span></p>
-                         <p><strong>Life Stage:</strong> <span class="badge bg-secondary">{{ formatText(detailTranscript.lifeStage) }}</span></p>
-                         <p><strong>Knowledge Level:</strong> <span class="badge" :class="getKnowledgeBadge(detailTranscript.knowledgeLevel)">{{ formatText(detailTranscript.knowledgeLevel) }}</span></p>
-                         <p><strong>Category:</strong> <span class="badge bg-info text-dark">{{ formatText(detailTranscript.customerCategory) }}</span></p>
-                         <p><strong>Clinic Pitched:</strong> <i :class="['fas', detailTranscript.clinicPitched ? 'fa-check-circle text-success' : 'fa-times-circle text-danger']"></i></p>
-                         <p><strong>Key Issues:</strong> {{ detailTranscript.keyIssues }}</p>
-                         <p><strong>Timestamp:</strong> {{ formatTimestamp(detailTranscript.timestamp) }}</p>
-                         <hr class="border-secondary">
-                         <h6>Full Transcript:</h6>
-                         <div class="transcript-text-display custom-scrollbar p-2 bg-secondary-subtle rounded">
-                            <pre>{{ detailTranscript.text }}</pre>
-                         </div>
-                    </div>
-                     <div v-else class="text-muted">No transcript selected.</div>
-                  </div>
-                   <div class="modal-footer border-secondary">
-                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-                     <button type="button" class="btn btn-primary btn-sm" @click="openChatFromDetail" :disabled="!detailTranscript">
-                        <i class="fas fa-comments"></i> Chat About This
-                     </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-             <div class="modal fade" id="transcriptChatModal" tabindex="-1" aria-labelledby="transcriptChatModalLabel" aria-hidden="true">
-              <div class="modal-dialog modal-lg">
-                <div class="modal-content bg-dark text-light">
-                  <div class="modal-header border-secondary">
-                    <h5 class="modal-title" id="transcriptChatModalLabel">
-                      <i class="fas fa-comments text-primary me-2"></i>Chatting about: {{ chatTargetTranscript?.uniqueId || chatTargetTranscript?.petName || 'Selected Transcript' }}
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" @click="resetChatModal"></button>
-                  </div>
-                  <div class="modal-body transcript-chat-body">
-                    <div id="transcriptChatMessages" class="chat-body custom-scrollbar mb-3">
-                       <div v-if="!chatTargetTranscript" class="text-center text-muted p-3">Select a transcript from the table first.</div>
-                       <div v-else>
-                            <div class="message" v-for="(msg, index) in transcriptChatHistory" :key="index" :class="{'user-message': msg.type === 'user'}">
-                                <div class="avatar" :class="msg.type === 'user' ? 'user-avatar' : 'bot-avatar'">
-                                    <i :class="['fas', msg.type === 'user' ? 'fa-user' : 'fa-robot']"></i>
-                                </div>
-                                <div class="message-content">
-                                    <div class="message-text" v-html="formatMarkdown(msg.text)"></div>
-                                </div>
+                   <div v-else>
+                       <div class="row g-3 mb-3">
+                           <div class="col-lg-6">
+                                <div class="stats-container">
+                                   <div class="stat-card">
+                                       <div class="stat-icon"><i class="fas fa-file-alt"></i></div>
+                                       <div class="stat-value">{{ stats.total }}</div>
+                                       <div class="stat-label">Total Transcripts</div>
+                                   </div>
+                                   <div class="stat-card">
+                                       <div class="stat-icon"><i class="fas fa-dog"></i></div>
+                                       <div class="stat-value">{{ stats.dogs }}</div>
+                                       <div class="stat-label">Dog Owners</div>
+                                   </div>
+                                   <div class="stat-card">
+                                       <div class="stat-icon"><i class="fas fa-cat"></i></div>
+                                       <div class="stat-value">{{ stats.cats }}</div>
+                                       <div class="stat-label">Cat Owners</div>
+                                   </div>
+                                   <div class="stat-card">
+                                       <div class="stat-icon"><i class="fas fa-clinic-medical"></i></div>
+                                       <div class="stat-value">{{ stats.clinicPitches }}</div>
+                                       <div class="stat-label">Clinic Pitched</div>
+                                   </div>
+                               </div>
                            </div>
-                            <div v-if="chatLoading" class="message" id="typingIndicatorModal">
-                                <div class="avatar bot-avatar"><i class="fas fa-robot"></i></div>
-                                <div class="message-content"><div class="typing-indicator"><span></span><span></span><span></span></div></div>
+                            <div class="col-lg-3">
+                                <div class="chart-card">
+                                   <h6>Knowledge Levels</h6>
+                                   <div class="chart-container-knowledge">
+                                       <div class="chart-bar high">
+                                           <div :style="{ width: knowledgeLevels.high + '%' }" class="chart-fill"></div>
+                                           <div class="chart-label">High</div>
+                                           <div class="chart-value">{{ knowledgeLevels.high }}%</div>
+                                       </div>
+                                        <div class="chart-bar medium">
+                                           <div :style="{ width: knowledgeLevels.medium + '%' }" class="chart-fill"></div>
+                                           <div class="chart-label">Medium</div>
+                                           <div class="chart-value">{{ knowledgeLevels.medium }}%</div>
+                                       </div>
+                                        <div class="chart-bar low">
+                                           <div :style="{ width: knowledgeLevels.low + '%' }" class="chart-fill"></div>
+                                           <div class="chart-label">Low</div>
+                                           <div class="chart-value">{{ knowledgeLevels.low }}%</div>
+                                       </div>
+                                   </div>
+                               </div>
+                            </div>
+                            <div class="col-lg-3">
+                               <div class="chart-card">
+                                   <h6>Pet Distribution</h6>
+                                   <div class="chart-canvas-container">
+                                       <canvas id="petDistributionChartCanvas"></canvas>
+                                   </div>
+                               </div>
                            </div>
                        </div>
-                    </div>
-                    <div class="input-group">
-                      <input type="text" id="transcriptChatInput" class="form-control chat-input" placeholder="Ask about this transcript..." v-model="transcriptChatInput" @keypress.enter="sendTranscriptChatMessage" :disabled="chatLoading || !chatTargetTranscript">
-                      <button class="btn btn-primary chat-submit" id="sendTranscriptChatMessageBtn" @click="sendTranscriptChatMessage" :disabled="chatLoading || !chatTargetTranscript || !transcriptChatInput.trim()">
-                         <i class="fas fa-paper-plane"></i>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-        </div>
+                        <div class="mb-3">
+                           <div class="section-header">
+                               <h5>Transcript Data</h5>
+                                <button class="btn btn-sm btn-outline-primary" @click="prepareChatModal" :disabled="!selectedTranscriptId">
+                                   <i class="fas fa-comments"></i> Chat About Selected
+                                </button>
+                           </div>
+                           <div class="table-responsive transcript-table custom-scrollbar">
+                                <table class="table table-sm table-hover align-middle">
+                                   <thead>
+                                       <tr>
+                                           <th></th>
+                                           <th>ID / Email</th>
+                                           <th>Pet Name</th>
+                                           <th>Type</th>
+                                           <th>Stage</th>
+                                           <th>Knowledge</th>
+                                           <th>Category</th>
+                                           <th>Clinic Pitched</th>
+                                           <th>Timestamp</th>
+                                           <th>Actions</th>
+                                       </tr>
+                                   </thead>
+                                   <tbody id="petsTableBody">
+                                       <tr v-if="paginatedData.length === 0">
+                                         <td colspan="10" class="text-center text-muted py-3">No matching transcripts found.</td>
+                                       </tr>
+                                       <tr v-for="item in paginatedData" :key="item.firebaseId" :class="{ 'table-active': selectedTranscriptId === item.firebaseId }" @click="selectTranscript(item.firebaseId)">
+                                           <td><input type="radio" name="selectedTranscript" :value="item.firebaseId" v-model="selectedTranscriptId"></td>
+                                           <td>{{ item.uniqueId || 'N/A' }}</td>
+                                           <td>{{ item.petName }}</td>
+                                           <td><span class="badge" :class="getPetTypeBadge(item.petType)">{{ formatText(item.petType) }}</span></td>
+                                           <td><span class="badge bg-secondary">{{ formatText(item.lifeStage) }}</span></td>
+                                           <td><span class="badge" :class="getKnowledgeBadge(item.knowledgeLevel)">{{ formatText(item.knowledgeLevel) }}</span></td>
+                                           <td><span class="badge bg-info text-dark">{{ formatText(item.customerCategory) }}</span></td>
+                                           <td><i :class="['fas', item.clinicPitched ? 'fa-check-circle text-success' : 'fa-times-circle text-danger']"></i></td>
+                                           <td>{{ formatTimestamp(item.timestamp) }}</td>
+                                           <td>
+                                              <button class="btn btn-outline-info btn-sm py-0 px-1" @click.stop="viewTranscriptDetail(item)">
+                                                   <i class="fas fa-eye"></i>
+                                               </button>
+                                           </td>
+                                       </tr>
+                                   </tbody>
+                               </table>
+                           </div>
+                           <nav v-if="totalPages > 1" aria-label="Transcript pagination" class="mt-2">
+                             <ul class="pagination pagination-sm justify-content-center">
+                               <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                                 <a class="page-link" href="#" @click.prevent="changePage(currentPage - 1)">«</a>
+                               </li>
+                               <li class="page-item" v-for="page in paginationRange" :key="page" :class="{ active: currentPage === page }">
+                                 <a v-if="page !== '...'" class="page-link" href="#" @click.prevent="changePage(page)">{{ page }}</a>
+                                 <span v-else class="page-link">...</span>
+                               </li>
+                               <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                                 <a class="page-link" href="#" @click.prevent="changePage(currentPage + 1)">»</a>
+                               </li>
+                             </ul>
+                           </nav>
+                        </div>
+
+                       <div class="analytics-section full-width">
+                           <div class="d-flex justify-content-between align-items-center mb-2">
+                             <h5 class="mb-0">Key Insights (Generated by AI)</h5>
+                             <button class="btn btn-sm btn-primary" @click="generateAllInsights" :disabled="generatingInsights || filteredData.length === 0">
+                                <span v-if="generatingInsights" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                {{ generatingInsights ? 'Generating...' : 'Refresh Insights' }}
+                              </button>
+                           </div>
+                           <div class="insights-container">
+                               <ul class="nav nav-tabs nav-fill nav-justified insight-tabs" id="insightTab" role="tablist">
+                                 <li class="nav-item" role="presentation">
+                                   <button class="nav-link active" id="common-questions-tab" data-bs-toggle="tab" data-bs-target="#commonQuestionsPanel" type="button" role="tab">Common Qs</button>
+                                 </li>
+                                 <li class="nav-item" role="presentation">
+                                   <button class="nav-link" id="customer-diff-tab" data-bs-toggle="tab" data-bs-target="#customerDifferencesPanel" type="button" role="tab">Food vs Pharma</button>
+                                 </li>
+                                 <li class="nav-item" role="presentation">
+                                   <button class="nav-link" id="excitement-tab" data-bs-toggle="tab" data-bs-target="#excitementFactorsPanel" type="button" role="tab">Excitement</button>
+                                 </li>
+                                 <li class="nav-item" role="presentation">
+                                   <button class="nav-link" id="pitches-tab" data-bs-toggle="tab" data-bs-target="#effectivePitchesPanel" type="button" role="tab">Pitches</button>
+                                 </li>
+                                  <li class="nav-item" role="presentation">
+                                   <button class="nav-link" id="lifestage-tab" data-bs-toggle="tab" data-bs-target="#lifeStageInsightsPanel" type="button" role="tab">Life Stage</button>
+                                 </li>
+                                  <li class="nav-item" role="presentation">
+                                   <button class="nav-link" id="clinic-opp-tab" data-bs-toggle="tab" data-bs-target="#clinicOpportunitiesPanel" type="button" role="tab">Clinic Opps</button>
+                                 </li>
+                               </ul>
+                               <div class="tab-content insight-content" id="insightTabContent">
+                                 <div class="tab-pane fade show active insight-panel" id="commonQuestionsPanel" role="tabpanel">
+                                   <div v-html="insights.commonQuestions || '<p class=text-muted>Generate insights or apply different filters...</p>'" class="insight-data custom-scrollbar"></div>
+                                 </div>
+                                 <div class="tab-pane fade insight-panel" id="customerDifferencesPanel" role="tabpanel">
+                                   <div v-html="insights.customerDifferences || '<p class=text-muted>Generate insights or apply different filters...</p>'" class="insight-data custom-scrollbar"></div>
+                                 </div>
+                                 <div class="tab-pane fade insight-panel" id="excitementFactorsPanel" role="tabpanel">
+                                  <div v-html="insights.excitementFactors || '<p class=text-muted>Generate insights or apply different filters...</p>'" class="insight-data custom-scrollbar"></div>
+                                 </div>
+                                 <div class="tab-pane fade insight-panel" id="effectivePitchesPanel" role="tabpanel">
+                                   <div v-html="insights.effectivePitches || '<p class=text-muted>Generate insights or apply different filters...</p>'" class="insight-data custom-scrollbar"></div>
+                                 </div>
+                                  <div class="tab-pane fade insight-panel" id="lifeStageInsightsPanel" role="tabpanel">
+                                   <div v-html="insights.lifeStageInsights || '<p class=text-muted>Generate insights or apply different filters...</p>'" class="insight-data custom-scrollbar"></div>
+                                 </div>
+                                  <div class="tab-pane fade insight-panel" id="clinicOpportunitiesPanel" role="tabpanel">
+                                   <div v-html="insights.clinicOpportunities || '<p class=text-muted>Generate insights or apply different filters...</p>'" class="insight-data custom-scrollbar"></div>
+                                 </div>
+                               </div>
+                           </div>
+                       </div>
+                   </div>
+               </div>
+
+                <div class="modal fade" id="transcriptDetailModal" tabindex="-1" aria-labelledby="transcriptDetailModalLabel" aria-hidden="true">
+                 <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                   <div class="modal-content bg-dark text-light">
+                     <div class="modal-header border-secondary">
+                       <h5 class="modal-title" id="transcriptDetailModalLabel">Transcript Details: {{ detailTranscript?.petName }}</h5>
+                       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                     </div>
+                     <div class="modal-body">
+                       <div v-if="detailTranscript">
+                            <p><strong>Identifier:</strong> {{ detailTranscript.uniqueId || 'N/A' }}</p>
+                            <p><strong>Pet Name:</strong> {{ detailTranscript.petName }}</p>
+                            <p><strong>Pet Type:</strong> <span class="badge" :class="getPetTypeBadge(detailTranscript.petType)">{{ formatText(detailTranscript.petType) }}</span></p>
+                            <p><strong>Life Stage:</strong> <span class="badge bg-secondary">{{ formatText(detailTranscript.lifeStage) }}</span></p>
+                            <p><strong>Knowledge Level:</strong> <span class="badge" :class="getKnowledgeBadge(detailTranscript.knowledgeLevel)">{{ formatText(detailTranscript.knowledgeLevel) }}</span></p>
+                            <p><strong>Category:</strong> <span class="badge bg-info text-dark">{{ formatText(detailTranscript.customerCategory) }}</span></p>
+                            <p><strong>Clinic Pitched:</strong> <i :class="['fas', detailTranscript.clinicPitched ? 'fa-check-circle text-success' : 'fa-times-circle text-danger']"></i></p>
+                            <p><strong>Key Issues:</strong> {{ detailTranscript.keyIssues }}</p>
+                            <p><strong>Timestamp:</strong> {{ formatTimestamp(detailTranscript.timestamp) }}</p>
+                            <hr class="border-secondary">
+                            <h6>Full Transcript:</h6>
+                            <div class="transcript-text-display custom-scrollbar p-2 bg-secondary-subtle rounded">
+                               <pre>{{ detailTranscript.text }}</pre>
+                            </div>
+                       </div>
+                        <div v-else class="text-muted">No transcript selected.</div>
+                     </div>
+                      <div class="modal-footer border-secondary">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary btn-sm" @click="openChatFromDetail" :disabled="!detailTranscript">
+                           <i class="fas fa-comments"></i> Chat About This
+                        </button>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+
+                <div class="modal fade" id="transcriptChatModal" tabindex="-1" aria-labelledby="transcriptChatModalLabel" aria-hidden="true">
+                 <div class="modal-dialog modal-lg">
+                   <div class="modal-content bg-dark text-light">
+                     <div class="modal-header border-secondary">
+                       <h5 class="modal-title" id="transcriptChatModalLabel">
+                         <i class="fas fa-comments text-primary me-2"></i>Chatting about: {{ chatTargetTranscript?.uniqueId || chatTargetTranscript?.petName || 'Selected Transcript' }}
+                       </h5>
+                       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" @click="resetChatModal"></button>
+                     </div>
+                     <div class="modal-body transcript-chat-body">
+                       <div id="transcriptChatMessages" class="chat-body custom-scrollbar mb-3">
+                          <div v-if="!chatTargetTranscript" class="text-center text-muted p-3">Select a transcript from the table first.</div>
+                          <div v-else>
+                               <div class="message" v-for="(msg, index) in transcriptChatHistory" :key="index" :class="{'user-message': msg.type === 'user'}">
+                                   <div class="avatar" :class="msg.type === 'user' ? 'user-avatar' : 'bot-avatar'">
+                                       <i :class="['fas', msg.type === 'user' ? 'fa-user' : 'fa-robot']"></i>
+                                   </div>
+                                   <div class="message-content">
+                                       <div class="message-text" v-html="formatMarkdown(msg.text)"></div>
+                                   </div>
+                              </div>
+                               <div v-if="chatLoading" class="message" id="typingIndicatorModal">
+                                   <div class="avatar bot-avatar"><i class="fas fa-robot"></i></div>
+                                   <div class="message-content"><div class="typing-indicator"><span></span><span></span><span></span></div></div>
+                              </div>
+                          </div>
+                       </div>
+                       <div class="input-group">
+                         <input type="text" id="transcriptChatInput" class="form-control chat-input" placeholder="Ask about this transcript..." v-model="transcriptChatInput" @keypress.enter="sendTranscriptChatMessage" :disabled="chatLoading || !chatTargetTranscript">
+                         <button class="btn btn-primary chat-submit" id="sendTranscriptChatMessageBtn" @click="sendTranscriptChatMessage" :disabled="chatLoading || !chatTargetTranscript || !transcriptChatInput.trim()">
+                            <i class="fas fa-paper-plane"></i>
+                         </button>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+
+           </div>
       </div>
+
     </main>
 
     <footer>
@@ -461,31 +483,45 @@
           button.classList.add('active');
 
           views.forEach(view => {
-            if (view.id === `main-${targetView}-view` || view.id === `${targetView}-view`) {
+            const viewId = view.id;
+            // Check both possible ID formats
+            if (viewId === `main-${targetView}-view` || viewId === `${targetView}-view`) {
                view.classList.add('active-view');
-               view.classList.remove('d-none'); // Ensure it's visible
-               view.style.display = ''; // Reset display property
+               view.classList.remove('d-none');
+               view.style.display = ''; // Use default display (flex)
             } else {
                view.classList.remove('active-view');
-                view.style.display = 'none'; // Hide inactive views
+               view.style.display = 'none'; // Explicitly hide
             }
           });
 
           if (targetView === 'analytics' && window.analyticsApp) {
+             // Give DOM time to render before refreshing charts
              setTimeout(() => {
                  window.analyticsApp.refreshCharts();
+                 // Check if data needs fetching (e.g., if initial load failed)
                  if (window.analyticsApp.analyticsData.length === 0 && !window.analyticsApp.loading) {
-                     window.analyticsApp.fetchAnalyticsData();
+                    window.analyticsApp.fetchAnalyticsData();
                  }
-             }, 100);
+             }, 150);
           } else if (targetView === 'chat' && window.chatApp) {
              window.chatApp.scrollChatToBottom();
           }
         });
       });
 
-       // Initialize default view (Chat)
-      document.querySelector('.view-toggle-btn[data-view="chat"]').click();
+       // Initialize default view (Chat) on load
+      const initialViewButton = document.querySelector('.view-toggle-btn[data-view="chat"]');
+      if (initialViewButton) {
+        initialViewButton.click();
+      } else {
+         // Fallback if button isn't found
+         const chatView = document.getElementById('main-chat-view') || document.getElementById('chat-view');
+         const analyticsView = document.getElementById('main-analytics-view') || document.getElementById('analytics-view');
+         if (chatView) chatView.style.display = '';
+         if (analyticsView) analyticsView.style.display = 'none';
+      }
+
     });
   </script>
 </body>
