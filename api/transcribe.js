@@ -1,3 +1,5 @@
+// api/transcribe.js
+
 const fs = require("fs");
 const formidable = require("formidable");
 const fetch = require("node-fetch");
@@ -13,7 +15,6 @@ const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY;
 const ALLOWED_ORIGINS = [
   "https://supertails.vercel.app",
   "https://turbo-space-zebra-vjr594vv9xjhpq5q-5500.app.github.dev",
-  // Add other allowed origins if necessary, like localhost for development
   "http://localhost:5500",
   "http://127.0.0.1:5500"
 ];
@@ -23,7 +24,6 @@ function setCorsHeaders(req, res) {
   if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   } else if (!origin) {
-     // Allow requests with no origin (like server-to-server or tools like curl) - adjust if needed
      res.setHeader("Access-Control-Allow-Origin", "*");
   }
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -33,7 +33,7 @@ function setCorsHeaders(req, res) {
 async function uploadAudio(filePath) {
   if (!ASSEMBLYAI_API_KEY) throw new Error("AssemblyAI API Key not configured on server.");
   const url = "https://api.assemblyai.com/v2/upload";
-  console.log(`Uploading audio file from path: ${filePath}`);
+  console.log(`[API] Uploading audio file from path: ${filePath}`); // Added API prefix to logs
   const fileStream = fs.createReadStream(filePath);
   const response = await fetch(url, {
     method: "POST",
@@ -41,14 +41,14 @@ async function uploadAudio(filePath) {
     body: fileStream,
   });
   const text = await response.text();
-  console.log("Upload response status:", response.status);
+  console.log("[API] Upload response status:", response.status);
   try {
     const data = JSON.parse(text);
     if (!response.ok) throw new Error(`Upload failed: ${data?.error || text}`);
-    console.log("Uploaded file URL:", data.upload_url);
+    console.log("[API] Uploaded file URL:", data.upload_url);
     return data.upload_url;
   } catch (err) {
-    console.error("Error parsing upload response:", err);
+    console.error("[API] Error parsing upload response:", err);
     throw new Error(`Upload parsing failed: ${text}`);
   }
 }
@@ -56,12 +56,15 @@ async function uploadAudio(filePath) {
 async function requestTranscription(audioUrl, languageCode) {
     if (!ASSEMBLYAI_API_KEY) throw new Error("AssemblyAI API Key not configured on server.");
     const url = "https://api.assemblyai.com/v2/transcript";
-    console.log(`Requesting transcription for URL: ${audioUrl}, Language: ${languageCode}`);
+    // --- FIX: Ensure languageCode is valid BEFORE sending ---
+    const validLanguageCode = (typeof languageCode === 'string' && languageCode.trim()) ? languageCode.trim() : 'auto';
+    console.log(`[API] Requesting transcription for URL: ${audioUrl}, Language Used: ${validLanguageCode}`);
+    // --- END FIX ---
     const payload = { audio_url: audioUrl };
-    if (languageCode && languageCode !== "auto") {
-        payload.language_code = languageCode;
+    if (validLanguageCode && validLanguageCode !== "auto") {
+        payload.language_code = validLanguageCode;
     } else {
-        payload.language_detection = true; // Enable auto-detection if 'auto' or unspecified
+        payload.language_detection = true;
     }
 
     const response = await fetch(url, {
@@ -73,14 +76,14 @@ async function requestTranscription(audioUrl, languageCode) {
         body: JSON.stringify(payload),
     });
     const text = await response.text();
-    console.log("Transcription request status:", response.status);
+    console.log("[API] Transcription request status:", response.status);
     try {
         const data = JSON.parse(text);
         if (!response.ok) throw new Error(`Transcription request failed: ${data?.error || text}`);
-        console.log("Transcription job ID:", data.id);
+        console.log("[API] Transcription job ID:", data.id);
         return data.id;
     } catch (err) {
-        console.error("Error parsing transcription request response:", err);
+        console.error("[API] Error parsing transcription request response:", err);
         throw new Error(`Transcription request parsing failed: ${text}`);
     }
 }
@@ -89,8 +92,8 @@ async function requestTranscription(audioUrl, languageCode) {
 async function pollTranscription(transcriptId) {
     if (!ASSEMBLYAI_API_KEY) throw new Error("AssemblyAI API Key not configured on server.");
     const url = `https://api.assemblyai.com/v2/transcript/${transcriptId}`;
-    console.log(`Polling transcription status for ID: ${transcriptId}`);
-    const maxAttempts = 20; // Limit polling attempts
+    console.log(`[API] Polling transcription status for ID: ${transcriptId}`);
+    const maxAttempts = 20;
     let attempts = 0;
 
     while (attempts < maxAttempts) {
@@ -103,23 +106,22 @@ async function pollTranscription(transcriptId) {
         let data;
         try { data = JSON.parse(text); }
         catch (err) {
-            console.error("Error parsing polling response:", err);
+            console.error("[API] Error parsing polling response:", err);
             throw new Error(`Polling parsing failed: ${text}`);
         }
 
-        console.log(`Polling attempt ${attempts}, Status: ${data.status}`);
+        console.log(`[API] Polling attempt ${attempts}, Status: ${data.status}`);
 
         if (data.status === "completed") {
-            console.log("Transcription completed.");
+            console.log("[API] Transcription completed.");
             return data.text;
         } else if (data.status === "error") {
-            console.error("Transcription failed with error:", data.error);
+            console.error("[API] Transcription failed with error:", data.error);
             throw new Error(`Transcription error: ${data.error}`);
         } else if (data.status === 'queued' || data.status === 'processing') {
-            // Wait before polling again
-            await new Promise((resolve) => setTimeout(resolve, 3000 * attempts)); // Exponential backoff basic
+            await new Promise((resolve) => setTimeout(resolve, 3000 * attempts));
         } else {
-             console.warn("Unknown transcription status:", data.status);
+             console.warn("[API] Unknown transcription status:", data.status);
              await new Promise((resolve) => setTimeout(resolve, 5000));
         }
     }
@@ -138,44 +140,54 @@ export default async function handler(req, res) {
   }
 
    if (!ASSEMBLYAI_API_KEY) {
-        console.error("AssemblyAI API Key is not configured on the server.");
+        console.error("[API] AssemblyAI API Key is not configured on the server.");
         return res.status(500).json({ error: "Server configuration error." });
    }
 
-  console.log("Received POST request for transcription.");
+  console.log("[API] Received POST request for transcription.");
   const form = formidable({ multiples: false, keepExtensions: true, uploadDir: "/tmp" });
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
-      console.error("Error parsing form data:", err);
+      console.error("[API] Error parsing form data:", err);
       return res.status(500).json({ error: `Error parsing form data: ${err.message}` });
     }
 
-    const file = files.file?.[0] ?? files.file; // Handle formidable v3 array structure
+    // --- FIX: Robust field and file handling ---
+    const fileArray = files.file; // formidable v3 often returns arrays
+    const file = Array.isArray(fileArray) ? fileArray[0] : fileArray;
+
      if (!file) {
-      console.error("No file provided in form data.");
+      console.error("[API] No file provided in form data.");
       return res.status(400).json({ error: "No file provided" });
     }
 
-    const languageCode = fields.language?.[0] ?? fields.language ?? "auto"; // Handle formidable v3 array structure
-    console.log("Language code received:", languageCode);
+    const languageField = fields.language; // formidable v3 often returns arrays
+    // Handle case where field might be an array or a string
+    let languageCodeRaw = Array.isArray(languageField) ? languageField[0] : languageField;
+    let languageCode = (typeof languageCodeRaw === 'string' && languageCodeRaw.trim()) ? languageCodeRaw.trim() : 'auto';
+
+    console.log("[API] Raw language field parsed:", languageField);
+    console.log("[API] Final language code determined:", languageCode);
+    // --- END FIX ---
 
     const filePath = file.filepath;
-    console.log("File received, stored at:", filePath);
+    console.log("[API] File received, stored at:", filePath);
 
     try {
       const audioUrl = await uploadAudio(filePath);
-      const transcriptId = await requestTranscription(audioUrl, languageCode);
+      const transcriptId = await requestTranscription(audioUrl, languageCode); // Pass the cleaned languageCode
       const transcriptionText = await pollTranscription(transcriptId);
-      console.log("Returning transcription text.");
+      console.log("[API] Returning transcription text.");
       res.status(200).setHeader("Content-Type", "text/plain").send(transcriptionText);
     } catch (error) {
-      console.error("Error during transcription process:", error);
+      console.error("[API] Error during transcription process:", error);
+      // Send back the specific error message from the catch block
       res.status(500).json({ error: error.message });
     } finally {
       fs.unlink(filePath, (unlinkErr) => {
-        if (unlinkErr) console.error("Error deleting temporary file:", unlinkErr);
-        else console.log("Temporary file deleted:", filePath);
+        if (unlinkErr) console.error("[API] Error deleting temporary file:", unlinkErr);
+        else console.log("[API] Temporary file deleted:", filePath);
       });
     }
   });
