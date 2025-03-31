@@ -4,24 +4,28 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SupertailsAI - Transcript Analysis</title>
-  {/* External CSS */}
+
+  <!-- External CSS -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.css" integrity="sha512-1cK78a1o+ht2JcaW6g8OXYwqpev9+6GqOkz9xmBN9iUUhIndKtxwILGWYOSibOKjLsEdjyjZvYDq/cZwNeak0w==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
   <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  {/* Local CSS */}
+
+  <!-- Local CSS -->
   <link rel="stylesheet" href="styles/styles.css">
-  {/* Favicon */}
+
+  <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 </head>
 <body>
 
-  {/* Vue App Root Element */}
+  <!-- Vue App Root Element -->
   <div id="app" class="app-container">
 
-    {/* Header */}
+    <!-- Header -->
     <header class="app-header">
       <div class="brand">
+        <!-- Ensure assets/favicon.svg exists -->
         <img src="assets/favicon.svg" alt="SupertailsAI Logo" class="brand-logo">
         <h1>SupertailsAI</h1>
       </div>
@@ -38,46 +42,47 @@
       </nav>
     </header>
 
-    {/* Main Content Area */}
+    <!-- Main Content Area -->
     <main class="app-main">
-      {/* Global Loading Indicator */}
+      <!-- Global Loading Indicator -->
       <div v-if="loading" class="global-loader">
         <div class="spinner"></div>
         <p>Loading Application...</p>
       </div>
 
-      {/* Main Content Area (Scrollable) - Added ref="mainScrollContainer" */}
+      <!-- Main Content Area (Scrollable) - Added ref="mainScrollContainer" -->
+      <!-- Vue controls the content inside this div via v-show -->
       <div v-else class="w-100 h-100 overflow-auto" ref="mainScrollContainer">
-        {/* Error Display */}
+        <!-- Error Display -->
         <div v-if="error" class="container pt-3">
             <div class="alert alert-danger" role="alert">
               <strong>Error:</strong> {{ error }}
             </div>
         </div>
 
-        {/* Dashboard View */}
+        <!-- Dashboard View Mount Point -->
         <div id="dashboard-view" v-show="currentView === 'dashboard'" class="container py-3" data-aos="fade-in">
-          {/* Dashboard Vue component will be mounted here */}
+          <!-- Dashboard Vue component content injected here -->
         </div>
 
-        {/* Chat View */}
+        <!-- Chat View Mount Point -->
         <div id="chat-view" v-show="currentView === 'chat'" class="container py-3 h-100" data-aos="fade-in">
-          {/* Chat Vue component will be mounted here */}
+          <!-- Chat Vue component content injected here -->
         </div>
 
-        {/* Analytics View */}
+        <!-- Analytics View Mount Point -->
         <div id="analytics-view" v-show="currentView === 'analytics'" class="container py-3 h-100" data-aos="fade-in">
-          {/* Analytics Vue component will be mounted here */}
+          <!-- Analytics Vue component content injected here -->
         </div>
       </div>
     </main>
 
-    {/* Footer */}
+    <!-- Footer -->
     <footer class="app-footer">
       <p>AI responses might be incorrect. Verify important information.</p>
     </footer>
 
-    {/* Transcript Chat Modal */}
+    <!-- Transcript Chat Modal -->
     <div class="modal fade" id="transcriptChatModal" tabindex="-1" aria-labelledby="transcriptChatModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
@@ -87,11 +92,11 @@
           </div>
           <div class="modal-body">
             <div id="modal-chat-messages" class="chat-body-modal">
-              {/* Messages dynamically added here */}
+              <!-- Default message for when modal loads -->
               <div class="message">
                 <div class="avatar bot-avatar"><i class="fas fa-robot"></i></div>
                 <div class="message-content">
-                  <div class="message-text">Loading chat...</div>
+                  <div class="message-text">Loading chat session...</div>
                 </div>
               </div>
             </div>
@@ -106,29 +111,25 @@
           </div>
         </div>
       </div>
-    </div>
+    </div> <!-- End Modal -->
 
-  </div> {/* End #app */}
+  </div> <!-- End #app -->
 
-  {/* External JavaScript Libraries */}
+  <!-- External JavaScript Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js" integrity="sha512-A7AYk1fGKX6S2SsHywmPkrnzTZHrgiVT7GcQkLGDe2ev0aWb8zejytzS8wjo7PGEXKqJOrjQ4oORtnimIRZBtw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js" integrity="sha512-39BSQXI5q1XlvVhLfFRidKG8KM6Tr6VS/XSnNo6N/A0ZXexHCeoUI/s+ulujQy3UREjoLNrMnFat8VI0mMugWA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js" integrity="sha512-ElRFoEQdI5Ht6kZvyzXhYG9NqjtkmlkfYk0wr6wHxU9JEHakS7UJZNeml5ALk+8IKlU6jDgMabC3vkumRokgJA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  {/* Firebase */}
+
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
-  {/* App Configuration (Loaded as a classic script) */}
+  <!-- App Configuration (Loaded as a classic script BEFORE main app script) -->
   <script src="scripts/config.js"></script>
 
-  {/* App Logic (Loaded as ES Modules) */}
+  <!-- Main App Logic (Loaded as ES Module) -->
   <script type="module" src="scripts/script.js"></script>
-  {/* The following are imported dynamically by script.js, so they don't need separate script tags here IF script.js handles their import */}
-  {/* <script type="module" src="scripts/dashboard.js"></script> */}
-  {/* <script type="module" src="scripts/chat.js"></script> */}
-  {/* <script type="module" src="scripts/analytics.js"></script> */}
-  {/* <script type="module" src="scripts/transcriptChat.js"></script> */}
 
 </body>
 </html>
