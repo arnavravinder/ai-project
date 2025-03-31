@@ -6,15 +6,14 @@ const chatApp = Vue.createApp({
         currentTranscript: "",
         currentAudioFile: null,
         currentUniqueId: "",
-        isProcessing: false, // Used for general loading/API calls
-        chatHistory: [], // This is reactive
-        userInputText: '', // Separate model for user input
+        isProcessing: false,
+        chatHistory: [],
+        userInputText: '',
         geminiApiUrl: "https://supertails.vercel.app/api/gemini",
         transcribeApiUrl: "https://supertails.vercel.app/api/transcribe",
-        // Rate Limiting for Gemini
         geminiRequestQueue: [],
         isGeminiProcessing: false,
-        geminiApiDelay: 5500, // Slightly over 5 seconds to be safe (12 req/min = 5s/req)
+        geminiApiDelay: 5500,
         lastGeminiRequestTime: 0,
       };
     },
@@ -32,7 +31,7 @@ const chatApp = Vue.createApp({
           loadingSection: document.getElementById('loading-section'),
           chatSection: document.getElementById('chat-section'),
           chatMessages: document.getElementById('chatMessages'),
-          userInput: document.getElementById('userInput'), // Keep ref if needed elsewhere
+          userInput: document.getElementById('userInput'),
           sendButton: document.getElementById('sendMessageBtn'),
           newTranscriptButton: document.getElementById('newTranscriptBtn'),
           fileInput: document.getElementById('fileInput'),
@@ -47,13 +46,11 @@ const chatApp = Vue.createApp({
           processWithoutTranscriptBtn: document.getElementById('processWithoutTranscriptBtn'),
           languageSelect: document.getElementById('languageSelect'),
           uniqueIdInput: document.getElementById('uniqueIdInput'),
-          // chatHistoryContainer: document.getElementById('chatMessages') // Reference for scrolling
         };
       },
   
       registerEventListeners() {
         this.elements.sendButton?.addEventListener('click', () => this.sendMessage());
-        // User input is now handled by v-model and @keypress
         this.elements.newTranscriptButton?.addEventListener('click', () => this.resetChatView());
         this.elements.fileInput?.addEventListener('change', (e) => { if (e.target.files?.length > 0) this.handleFileUpload(e.target.files[0]); });
         this.elements.processWithTranscriptBtn?.addEventListener('click', () => this.processWithTranscript());
@@ -63,26 +60,46 @@ const chatApp = Vue.createApp({
         this.elements.dropArea?.addEventListener('drop', this.handleDrop);
       },
   
-      // handleDragOver, handleDragLeave, handleDrop remain the same
+      handleDragOver(e) {
+          e.preventDefault(); e.stopPropagation();
+          if (this.elements.dropArea) {
+              this.elements.dropArea.style.borderColor = 'var(--primary)';
+              this.elements.dropArea.style.backgroundColor = 'rgba(140, 82, 255, 0.1)';
+          }
+      },
+      handleDragLeave(e) {
+          e.preventDefault(); e.stopPropagation();
+          if (this.elements.dropArea) {
+              this.elements.dropArea.style.borderColor = 'var(--primary-light)';
+              this.elements.dropArea.style.backgroundColor = 'rgba(140, 82, 255, 0.05)';
+          }
+      },
+      handleDrop(e) {
+          e.preventDefault(); e.stopPropagation();
+           if (this.elements.dropArea) {
+              this.elements.dropArea.style.borderColor = 'var(--primary-light)';
+              this.elements.dropArea.style.backgroundColor = 'rgba(140, 82, 255, 0.05)';
+          }
+          if (e.dataTransfer.files?.length > 0 && this.elements.fileInput) {
+               this.elements.fileInput.files = e.dataTransfer.files;
+               this.handleFileUpload(e.dataTransfer.files[0]);
+          }
+      },
   
       resetChatView() {
         this.currentTranscript = "";
         this.currentAudioFile = null;
         this.currentUniqueId = "";
-        this.isProcessing = false; // Reset general processing state
-        this.userInputText = ''; // Clear input field model
+        this.isProcessing = false;
+        this.isGeminiProcessing = false;
+        this.userInputText = '';
         this.chatHistory = [{ type: 'bot', text: 'Hi there! Upload a transcript or audio file, or paste text to begin. Then, ask me questions about it.' }];
-  
-         // Reset Gemini queue
-         this.geminiRequestQueue = [];
-         this.isGeminiProcessing = false;
-         this.lastGeminiRequestTime = 0;
-  
+        this.geminiRequestQueue = [];
+        this.lastGeminiRequestTime = 0;
   
         if (this.elements.uploadSection) this.elements.uploadSection.style.display = 'flex';
         if (this.elements.loadingSection) this.elements.loadingSection.style.display = 'none';
         if (this.elements.chatSection) this.elements.chatSection.classList.add('d-none');
-  
         if (this.elements.fileInput) this.elements.fileInput.value = '';
         if (this.elements.fileName) this.elements.fileName.textContent = '';
         if (this.elements.fileFeedback) this.elements.fileFeedback.style.display = 'none';
@@ -92,11 +109,9 @@ const chatApp = Vue.createApp({
         if (this.elements.audioPlayer) this.elements.audioPlayer.src = '';
         if (this.elements.transcriptInput) this.elements.transcriptInput.value = '';
         if (this.elements.uniqueIdInput) this.elements.uniqueIdInput.value = '';
-  
         this.scrollChatToBottom();
       },
   
-      // showFileFeedback, handleFileUpload remain the same
        showFileFeedback(type, message) {
           if (!this.elements.fileFeedback) return;
           this.elements.fileFeedback.textContent = message;
@@ -115,7 +130,6 @@ const chatApp = Vue.createApp({
             console.error("One or more chat UI elements are missing.");
             return;
         }
-  
   
         if (!allowedTypes.some(type => file.type.startsWith(type.split('/')[0]))) {
           this.showFileFeedback('error', 'Invalid file type. Allowed: .txt, .pdf, .doc(x), audio files.');
@@ -161,7 +175,6 @@ const chatApp = Vue.createApp({
         } else {
              this.showFileFeedback('info', `${file.type.split('/')[1].toUpperCase()} file uploaded. Provide transcript manually if needed.`);
         }
-  
          this.currentUniqueId = this.elements.uniqueIdInput.value.trim();
       },
   
@@ -190,7 +203,7 @@ const chatApp = Vue.createApp({
                console.error("Cannot transcribe: Missing required UI elements.");
                return;
           }
-          this.isProcessing = true; // Use general processing flag for transcription
+          this.isProcessing = true;
           this.elements.uploadSection.style.display = 'none';
           this.elements.loadingSection.style.display = 'flex';
           this.showFileFeedback('info', 'Transcribing audio... This may take a moment.');
@@ -214,10 +227,7 @@ const chatApp = Vue.createApp({
                   if (!response.ok) {
                       return response.text().then(text => {
                           let errorDetail = text;
-                          try {
-                              const jsonError = JSON.parse(text);
-                              if (jsonError && jsonError.error) { errorDetail = jsonError.error; }
-                          } catch(e) { /* Ignore */ }
+                          try { const jsonError = JSON.parse(text); if (jsonError && jsonError.error) { errorDetail = jsonError.error; }} catch(e) { }
                           throw new Error(`Transcription failed (${response.status}): ${errorDetail}`)
                       });
                   }
@@ -228,34 +238,31 @@ const chatApp = Vue.createApp({
                   this.showFileFeedback('success', 'Audio transcribed successfully!');
                   this.startChatSession();
                   this.saveTranscriptIfApplicable();
-                  // isProcessing will be turned off by startChatSession's timeout
               })
               .catch(error => {
                   console.error("Transcription error:", error);
                   this.showFileFeedback('error', `${error.message}. Cannot proceed with chat.`);
                   this.resetChatView();
-                  this.isProcessing = false; // Ensure processing stops on error
+                  this.isProcessing = false;
                   if (this.elements.loadingSection) this.elements.loadingSection.style.display = 'none';
               });
       },
   
        startChatSession() {
            if (!this.elements.uploadSection || !this.elements.loadingSection || !this.elements.chatSection) return;
-  
-           this.isProcessing = true; // Use general flag
+           this.isProcessing = true;
            this.elements.uploadSection.style.display = 'none';
            this.elements.loadingSection.style.display = 'flex';
-  
            setTimeout(() => {
                this.chatHistory = [{ type: 'bot', text: "I've processed the transcript. Ask me anything about it." }];
                this.elements.loadingSection.style.display = 'none';
                this.elements.chatSection.classList.remove('d-none');
-               this.isProcessing = false; // Turn off general processing
+               this.isProcessing = false;
                this.scrollChatToBottom();
            }, 500);
       },
   
-      async saveTranscriptIfApplicable() {
+       async saveTranscriptIfApplicable() {
           if (!this.currentTranscript || this.currentTranscript === this.defaultTranscript) return;
           try {
               const db = await initializeFirebase();
@@ -276,10 +283,6 @@ const chatApp = Vue.createApp({
            }
       },
   
-      // analyzeTranscriptText, detectPetType, extractPetName, detectLifeStage,
-      // assessKnowledgeLevel, extractKeyIssues, detectCustomerCategory, detectClinicPitch
-      // remain the same as previous correct version
-  
       analyzeTranscriptText(text) {
           if (!text || typeof text !== 'string') return {};
           return {
@@ -292,229 +295,144 @@ const chatApp = Vue.createApp({
               clinicPitched: this.detectClinicPitch(text)
           };
       },
-  
       detectPetType(text = '') {
-        const lowerText = text.toLowerCase();
-        const dogKeywords = ['dog', 'puppy', 'canine', 'doggie', 'pooch'];
-        const catKeywords = ['cat', 'kitten', 'feline', 'kitty'];
-        const dogCount = dogKeywords.reduce((n, k) => n + (lowerText.match(new RegExp(`\\b${k}\\b`, 'g')) || []).length, 0);
-        const catCount = catKeywords.reduce((n, k) => n + (lowerText.match(new RegExp(`\\b${k}\\b`, 'g')) || []).length, 0);
-        if (dogCount > catCount) return 'dog';
-        if (catCount > dogCount) return 'cat';
-        if (dogCount > 0 || catCount > 0) return 'other';
-        return 'unknown';
+        const lt = text.toLowerCase(); const dk=['dog','puppy','canine']; const ck =['cat','kitten','feline'];
+        const dc =dk.reduce((n, k)=>n+(lt.match(new RegExp(`\\b${k}\\b`,'g'))||[]).length,0); const cc =ck.reduce((n, k)=>n+(lt.match(new RegExp(`\\b${k}\\b`,'g'))||[]).length,0);
+        if(dc>cc) return 'dog'; if(cc>dc) return 'cat'; if(dc>0||cc>0) return 'other'; return 'unknown';
       },
-  
       extractPetName(text = '') {
-         const patterns = [ /my (?:dog|cat|pet)\s(?:is\s)?(?:called|named)\s(\w+)/i, /(\w+)\s(?:is\s)?my (?:dog|cat|pet)/i, /have a (?:dog|cat|pet)\s(?:called|named)\s(\w+)/i, /pet's name is\s(\w+)/i ];
-          for (const pattern of patterns) {
-              const match = text.match(pattern);
-              if (match && match[1]) return match[1].charAt(0).toUpperCase() + match[1].slice(1);
-          }
-          const words = text.split(/\s+/);
-          const petKeywords = ['dog', 'cat', 'pet', 'puppy', 'kitten'];
-          for (let i = 0; i < words.length; i++) {
-               if (/^[A-Z][a-z]{2,}$/.test(words[i]) && !['I', 'He', 'She', 'They', 'My', 'The'].includes(words[i])) {
-                  if (i > 0 && petKeywords.includes(words[i-1]?.toLowerCase().replace(/[.,!?]/g, ''))) return words[i];
-                  if (i < words.length - 1 && petKeywords.includes(words[i+1]?.toLowerCase().replace(/[.,!?]/g, ''))) return words[i];
-              }
-          }
-         return 'Unknown';
+         const pts = [/my (?:dog|cat|pet)\s(?:is\s)?(?:called|named)\s(\w+)/i,/(\w+)\s(?:is\s)?my (?:dog|cat|pet)/i,/have a (?:dog|cat|pet)\s(?:called|named)\s(\w+)/i,/pet's name is\s(\w+)/i ];
+          for(const p of pts){ const m=text.match(p); if(m&&m[1]) return m[1].charAt(0).toUpperCase()+m[1].slice(1); }
+          const w=text.split(/\s+/); const pk=['dog','cat','pet','puppy','kitten'];
+          for(let i=0;i<w.length;i++){ if(/^[A-Z][a-z]{2,}$/.test(w[i])&&!['I','He','She','They','My','The'].includes(w[i])){ if(i>0&&pk.includes(w[i-1]?.toLowerCase().replace(/[.,!?]/g,''))) return w[i]; if(i<w.length-1&&pk.includes(w[i+1]?.toLowerCase().replace(/[.,!?]/g,''))) return w[i]; }} return 'Unknown';
       },
-  
       detectLifeStage(text = '') {
-        const lowerText = text.toLowerCase();
-        if (/\b(puppy|kitten|young|baby|newborn|\d+\s+months? old|\d+\s+weeks? old)\b/.test(lowerText)) return 'puppy';
-        if (/\b(senior|older|elderly|aging|geriatric|old dog|old cat)\b/.test(lowerText)) return 'senior';
-        if (/\b(adult|\d+\s+years? old|mature)\b/.test(lowerText)) return 'adult';
-        return 'unknown';
+        const lt=text.toLowerCase(); if(/\b(puppy|kitten|young|baby|newborn|\d+\s+months? old|\d+\s+weeks? old)\b/.test(lt)) return 'puppy'; if(/\b(senior|older|elderly|aging|geriatric|old dog|old cat)\b/.test(lt)) return 'senior'; if(/\b(adult|\d+\s+years? old|mature)\b/.test(lt)) return 'adult'; return 'unknown';
       },
-  
        assessKnowledgeLevel(text = '') {
-          const lowPatterns = [/don't know/i, /not sure/i, /confused/i, /what should i/i, /how do i/i, /first-time/i];
-          const highPatterns = [/i've researched/i, /i read that/i, /according to/i, /understand that/i, /the vet recommended/i, /i've been (feeding|giving)/i];
-          const lowMatches = lowPatterns.filter(p => p.test(text)).length;
-          const highMatches = highPatterns.filter(p => p.test(text)).length;
-          const score = highMatches - lowMatches;
-          if (score >= 1) return 'high';
-          if (score <= -1) return 'low';
-          return 'medium';
+          const lp=[/don't know/i,/not sure/i,/confused/i,/what should i/i,/how do i/i,/first-time/i]; const hp=[/i've researched/i,/i read that/i,/according to/i,/understand that/i,/the vet recommended/i,/i've been (feeding|giving)/i];
+          const lm=lp.filter(p=>p.test(text)).length; const hm=hp.filter(p=>p.test(text)).length; const s=hm-lm; if(s>=1) return 'high'; if(s<=-1) return 'low'; return 'medium';
       },
-  
        extractKeyIssues(text = '') {
-          const issues = new Set();
-          const categories = {
-              diet: ['food', 'feed', 'diet', 'eating', 'nutrition', 'meal', 'appetite', 'kibble', 'treats'],
-              health: ['sick', 'pain', 'hurt', 'vet', 'medicine', 'symptom', 'treatment', 'disease', 'condition', 'vaccination', 'pills', 'arthritis', 'check-up', 'ill', 'vomit', 'diarrhea'],
-              behavior: ['behavior', 'training', 'aggressive', 'anxiety', 'scared', 'barking', 'biting', 'chewing', 'house-trained', 'litter box', 'destructive'],
-              grooming: ['groom', 'bath', 'fur', 'hair', 'brush', 'nail', 'coat', 'shedding', 'matting']
-          };
-          const lowerText = text.toLowerCase();
-          for (const [category, keywords] of Object.entries(categories)) {
-              if (keywords.some(kw => lowerText.includes(kw))) {
-                  issues.add(category);
-              }
-          }
-          return issues.size > 0 ? Array.from(issues).join(', ') : 'general';
+          const iss=new Set(); const cats={diet:['food','feed','diet','eat','nutrition','meal','appetite','kibble','treats'],health:['sick','pain','hurt','vet','medic','symptom','treat','disease','condition','vaccin','pills','arthritis','check-up','ill','vomit','diarrhea'],behavior:['behav','train','aggress','anxiety','scared','bark','bit','chew','house-trained','litter box','destruct'],grooming:['groom','bath','fur','hair','brush','nail','coat','shed','mat']};
+          const lt=text.toLowerCase(); for(const[cat,kws] of Object.entries(cats)){ if(kws.some(kw=>lt.includes(kw))) iss.add(cat); } return iss.size>0?Array.from(iss).join(', '):'general';
       },
-  
       detectCustomerCategory(text = '') {
-          const lowerText = text.toLowerCase();
-          const foodKeywords = ['food', 'diet', 'feeding', 'nutrition', 'meal', 'kibble', 'wet food', 'dry food', 'treats'];
-          const pharmacyKeywords = ['medicine', 'medication', 'prescription', 'tablets', 'pills', 'treatment', 'therapy', 'arthritis', 'vaccination', 'supplement', 'flea', 'tick', 'worm'];
-          const foodScore = foodKeywords.reduce((n, k) => n + (lowerText.match(new RegExp(`\\b${k}\\b`, 'g')) || []).length, 0);
-          const pharmacyScore = pharmacyKeywords.reduce((n, k) => n + (lowerText.match(new RegExp(`\\b${k}\\b`, 'g')) || []).length, 0);
-          if (foodScore > 0 && pharmacyScore > 0) return 'both';
-          if (foodScore > pharmacyScore) return 'food';
-          if (pharmacyScore > foodScore) return 'pharmacy';
-          return 'general';
+          const lt=text.toLowerCase(); const fk=['food','diet','feeding','nutrition','meal','kibble','wet food','dry food','treats']; const pk=['medicine','medication','prescription','tablets','pills','treatment','therapy','arthritis','vaccination','supplement','flea','tick','worm'];
+          const fs=fk.reduce((n,k)=>n+(lt.match(new RegExp(`\\b${k}\\b`,'g'))||[]).length,0); const ps=pk.reduce((n,k)=>n+(lt.match(new RegExp(`\\b${k}\\b`,'g'))||[]).length,0);
+          if(fs>0&&ps>0) return 'both'; if(fs>ps) return 'food'; if(ps>fs) return 'pharmacy'; return 'general';
       },
-  
       detectClinicPitch(text = '') {
-          const clinicKeywords = ['vet visit', 'veterinary clinic', 'check-up', 'examination', 'schedule an appointment', 'visit the vet', 'bring (him|her|them|your pet) in', 'veterinary care', 'clinic', 'veterinarian', 'vet appointment'];
-          return clinicKeywords.some(keyword => text.toLowerCase().match(new RegExp(keyword.replace(/\s/g, '\\s*'), 'i')));
+          const ck=['vet visit','veterinary clinic','check-up','examination','schedule an appointment','visit the vet','bring (him|her|them|your pet) in','veterinary care','clinic','veterinarian','vet appointment'];
+          return ck.some(k=>text.toLowerCase().match(new RegExp(k.replace(/\s/g,'\\s*'),'i')));
       },
   
       sendMessage() {
-        const userMessage = this.userInputText.trim(); // Use v-model variable
-        if (!userMessage || this.isGeminiProcessing || this.isProcessing) return; // Check both flags
-  
-        if (!this.currentTranscript) {
-            this.addMessageToChat('bot', "Please load a transcript first before asking questions.");
-            return;
-        }
-  
+        const userMessage = this.userInputText.trim();
+        if (!userMessage || this.isProcessing || this.isGeminiProcessing) return;
+        if (!this.currentTranscript) { this.addMessageToChat('bot', "Please load a transcript first."); return; }
         this.addMessageToChat('user', userMessage);
-        this.userInputText = ''; // Clear the input field model
+        this.userInputText = '';
         this.addTypingIndicator();
-        this.enqueueGeminiRequest(userMessage); // Enqueue instead of sending directly
+        this.enqueueGeminiRequest(userMessage);
       },
   
-      // --- Predefined Prompts ---
       sendPredefinedPrompt(type) {
-          if (!this.currentTranscript || this.isGeminiProcessing || this.isProcessing) return;
-  
+          if (!this.currentTranscript || this.isProcessing || this.isGeminiProcessing) return;
           let userMessage = "";
-          let systemPrompt = ""; // Store the text for the user message bubble
-  
+          let systemPrompt = "";
           switch(type) {
               case 'knowledge':
-                  systemPrompt = "Assess Pet Parent Knowledge Score";
-                  userMessage = `Based *only* on the provided SuperTails transcript, assess the pet parent's knowledge level about pet care. Give a score from 1 (very low) to 10 (expert) and provide 1-2 brief examples from the text to justify the score.`;
+                  systemPrompt = "Assess Knowledge Score";
+                  userMessage = `Based *only* on the provided SuperTails transcript, assess the pet parent's knowledge level about pet care. Give a score from 1 (very low) to 10 (expert) and provide 1-2 brief examples from the text to justify the score. Refer to SuperTails where appropriate.`;
                   break;
               case 'diet':
                   systemPrompt = "Analyze Pet Diet";
-                  userMessage = `Based *only* on the provided SuperTails transcript, analyze the pet's diet. What are they being fed? Are any concerns mentioned? Are any specific SuperTails products mentioned or relevant?`;
+                  userMessage = `Based *only* on the provided SuperTails transcript, analyze the pet's diet. What are they being fed? Are any concerns mentioned? Are any specific SuperTails products mentioned or relevant? Refer to SuperTails where appropriate.`;
                   break;
               case 'summary':
                   systemPrompt = "Summarize Call";
-                  userMessage = `Provide a concise summary (3-4 bullet points) of the key topics discussed in this SuperTails transcript. Focus on the main issues and outcomes, if mentioned.`;
+                  userMessage = `Provide a concise summary (3-4 bullet points) of the key topics discussed in this SuperTails transcript. Focus on the main issues and outcomes, if mentioned. Refer to SuperTails where appropriate.`;
                   break;
-              default:
-                  return; // Unknown type
+              default: return;
           }
-  
-           this.addMessageToChat('user', `[Action: ${systemPrompt}]`); // Show the action taken
+           this.addMessageToChat('user', `[Action: ${systemPrompt}]`);
            this.addTypingIndicator();
-           this.enqueueGeminiRequest(userMessage); // Enqueue the actual prompt
+           this.enqueueGeminiRequest(userMessage);
       },
-      // --- End Predefined Prompts ---
-  
   
       addMessageToChat(type, text) {
           this.chatHistory.push({ type, text });
-          this.scrollChatToBottom(); // Let scroll handle nextTick
+          this.scrollChatToBottom();
       },
   
       addTypingIndicator() {
-          // This is now handled reactively by v-if="isGeminiProcessing" in the template
+          this.isProcessing = true;
           this.scrollChatToBottom();
       },
   
       removeTypingIndicator() {
-         // This is now handled reactively by v-if="isGeminiProcessing" in the template
+          // This is handled by the queue processor now
       },
   
        scrollChatToBottom() {
-           // Use nextTick to wait for DOM update after chatHistory changes
+           // FIX: Target the specific DOM element directly by ID
            this.$nextTick(() => {
-              const chatMessagesEl = this.$el.querySelector('#chatMessages'); // More reliable query
+              const chatMessagesEl = document.getElementById('chatMessages'); // Use direct ID query
               if (chatMessagesEl) {
-                  // A small delay helps if CSS transitions are involved
                   setTimeout(() => {
                       chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-                  }, 100);
+                  }, 50);
+              } else {
+                  console.warn("Chat messages element not found for scrolling.");
               }
            });
       },
   
       formatMarkdown(text) {
-           if (!text) return '';
-          let html = text;
-          // Basic HTML escaping first for safety
-          html = html.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
-          // Markdown conversions
-          html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-          html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-          html = html.replace(/`(.*?)`/g, '<code>$1</code>');
-          html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-          // More robust list handling
-          html = html.replace(/^[\s]*([-*+])\s+(.*)/gm, '<li>$2</li>'); // Capture list item content
-          html = html.replace(/^(<br\s*\/?>)*(<li>.*<\/li>)(<br\s*\/?>)*/gm, '$2'); // Remove breaks around LIs
-          html = html.replace(/(<ul>\s*)?(<li>.*?<\/li>\s*)+(<\/ul>\s*)?/g, (match, p1, p2, p3) => { // Wrap consecutive LIs
-              return `<ul>${match.replace(/<\/?ul>\s*/g, '')}</ul>`; // Ensure only one UL wrapper
-          });
-          html = html.replace(/<br>\s*<ul>/g, '<ul>'); // Clean breaks before list
-          html = html.replace(/<\/ul>\s*<br>/g, '</ul>'); // Clean breaks after list
-          html = html.replace(/\n/g, '<br>'); // Remaining newlines
-          return html;
+           if (!text) return ''; let html = text;
+           html = html.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+           html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); html = html.replace(/\*(.*?)\*/g, '<em>$1</em>'); html = html.replace(/`(.*?)`/g, '<code>$1</code>');
+           html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+           html = html.replace(/^[\s]*([-*+])\s+(.*)/gm, '<li>$2</li>'); html = html.replace(/^(<br\s*\/?>)*(<li>.*<\/li>)(<br\s*\/?>)*/gm, '$2');
+           html = html.replace(/(<ul>\s*)?(<li>.*?<\/li>\s*)+(<\/ul>\s*)?/g, (match) => `<ul>${match.replace(/<\/?ul>\s*/g, '')}</ul>`);
+           html = html.replace(/<br>\s*<ul>/g, '<ul>'); html = html.replace(/<\/ul>\s*<br>/g, '</ul>'); html = html.replace(/\n/g, '<br>');
+           return html;
       },
   
-       // --- Gemini Rate Limiting Logic ---
       enqueueGeminiRequest(userMessage) {
           const request = { userMessage };
           this.geminiRequestQueue.push(request);
-          this.processGeminiQueue(); // Start processing if not already doing so
+          if (!this.isGeminiProcessing) {
+              this.isProcessing = true;
+          }
+          this.processGeminiQueue();
       },
   
       async processGeminiQueue() {
-          if (this.isGeminiProcessing || this.geminiRequestQueue.length === 0) {
-              return; // Don't process if already busy or queue is empty
-          }
-  
-          this.isGeminiProcessing = true; // Set busy flag
-          this.isProcessing = true; // Also set general processing for typing indicator
-  
-          const request = this.geminiRequestQueue.shift(); // Get the next request
-  
-          // Calculate delay needed since last request
+          if (this.isGeminiProcessing || this.geminiRequestQueue.length === 0) return;
+          this.isGeminiProcessing = true;
+          this.isProcessing = true;
+          const request = this.geminiRequestQueue.shift();
           const now = Date.now();
           const timeSinceLast = now - this.lastGeminiRequestTime;
           const delayNeeded = Math.max(0, this.geminiApiDelay - timeSinceLast);
-  
           if (delayNeeded > 0) {
               console.log(`Rate limiting: Waiting ${delayNeeded}ms...`);
               await new Promise(resolve => setTimeout(resolve, delayNeeded));
           }
-  
-          this.lastGeminiRequestTime = Date.now(); // Record time *before* making the call
-          await this.sendToGeminiAPI(request.userMessage); // Await the actual API call
-  
-          this.isGeminiProcessing = false; // Clear busy flag
-          this.isProcessing = false; // Clear general processing flag
-  
-          // Process next item in queue if any
+          this.lastGeminiRequestTime = Date.now();
+          await this.sendToGeminiAPI(request.userMessage);
+          this.isGeminiProcessing = false;
+          if (this.geminiRequestQueue.length === 0) {
+               this.isProcessing = false;
+          }
           if (this.geminiRequestQueue.length > 0) {
-              // Use setTimeout to yield control briefly before next check
               setTimeout(() => this.processGeminiQueue(), 100);
           }
       },
-      // --- End Gemini Rate Limiting ---
-  
   
       async sendToGeminiAPI(userMessage) {
-         // isProcessing and typing indicator are now handled by processGeminiQueue
-  
          const prompt = `You are SupertailsAI, an assistant analyzing a customer interaction transcript for the company SuperTails.
   The transcript may have transcription errors; ignore them and focus on the content.
   Your answers MUST be based *only* on the provided transcript text. Do not add external knowledge or opinions.
@@ -523,46 +441,26 @@ const chatApp = Vue.createApp({
   
   Transcript:
   ---
-  ${this.currentTranscript}
+  ${this.currentTranscript || '[No Transcript Loaded]'}
   ---
   
   User Question: ${userMessage}
   
   Answer:`;
-  
         try {
           const response = await fetch(this.geminiApiUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt })
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt })
           });
-  
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API Error (${response.status}): ${errorText || response.statusText}`);
-          }
-  
+          if (!response.ok) { const errorText = await response.text(); throw new Error(`API Error (${response.status}): ${errorText || response.statusText}`); }
           const data = await response.json();
           let botResponse = "Sorry, I couldn't get a response from the AI.";
-  
-          if (data?.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-              botResponse = data.data.candidates[0].content.parts[0].text;
-          } else if (data?.text) { // Fallback for different potential structures
-              botResponse = data.text;
-          } else if (typeof data === 'string') {
-               botResponse = data; // If the API just returns a string
-          }
-  
-          // Message is added reactively, no manual DOM manipulation needed
+          if (data?.data?.candidates?.[0]?.content?.parts?.[0]?.text) { botResponse = data.data.candidates[0].content.parts[0].text; }
+          else if (data?.text) { botResponse = data.text; }
+          else if (typeof data === 'string') { botResponse = data; }
           this.addMessageToChat('bot', botResponse);
-  
         } catch (error) {
           console.error("Gemini API Error:", error);
-          // Add error message to chat
           this.addMessageToChat('bot', `Sorry, SuperTailsAI encountered an error: ${error.message}. Please try again.`);
-        } finally {
-           // Rate limiting flags are cleared in processGeminiQueue
-           // No need to remove typing indicator here manually
         }
       }
     }
