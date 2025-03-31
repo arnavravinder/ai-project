@@ -39,7 +39,7 @@ const chatApp = Vue.createApp({
           transcriptInput: document.getElementById('transcriptInput'),
           processWithTranscriptBtn: document.getElementById('processWithTranscriptBtn'),
           processWithoutTranscriptBtn: document.getElementById('processWithoutTranscriptBtn'),
-          languageSelect: document.getElementById('languageSelect'),
+          languageSelect: document.getElementById('languageSelect'), // Ensure this ID matches HTML
           uniqueIdInput: document.getElementById('uniqueIdInput'),
         };
       },
@@ -59,25 +59,33 @@ const chatApp = Vue.createApp({
       handleDragOver(e) {
           e.preventDefault();
           e.stopPropagation();
-          this.elements.dropArea.style.borderColor = 'var(--primary)';
-          this.elements.dropArea.style.backgroundColor = 'rgba(140, 82, 255, 0.1)';
+          if (this.elements.dropArea) { // Check if element exists
+              this.elements.dropArea.style.borderColor = 'var(--primary)';
+              this.elements.dropArea.style.backgroundColor = 'rgba(140, 82, 255, 0.1)';
+          }
       },
   
       handleDragLeave(e) {
           e.preventDefault();
           e.stopPropagation();
-          this.elements.dropArea.style.borderColor = 'var(--primary-light)';
-          this.elements.dropArea.style.backgroundColor = 'rgba(140, 82, 255, 0.05)';
+          if (this.elements.dropArea) { // Check if element exists
+              this.elements.dropArea.style.borderColor = 'var(--primary-light)';
+              this.elements.dropArea.style.backgroundColor = 'rgba(140, 82, 255, 0.05)';
+          }
       },
   
       handleDrop(e) {
           e.preventDefault();
           e.stopPropagation();
-          this.elements.dropArea.style.borderColor = 'var(--primary-light)';
-          this.elements.dropArea.style.backgroundColor = 'rgba(140, 82, 255, 0.05)';
+           if (this.elements.dropArea) { // Check if element exists
+              this.elements.dropArea.style.borderColor = 'var(--primary-light)';
+              this.elements.dropArea.style.backgroundColor = 'rgba(140, 82, 255, 0.05)';
+          }
           if (e.dataTransfer.files?.length > 0) {
-              this.elements.fileInput.files = e.dataTransfer.files;
-              this.handleFileUpload(e.dataTransfer.files[0]);
+               if (this.elements.fileInput) { // Check if element exists
+                  this.elements.fileInput.files = e.dataTransfer.files;
+                  this.handleFileUpload(e.dataTransfer.files[0]);
+              }
           }
       },
   
@@ -88,23 +96,25 @@ const chatApp = Vue.createApp({
         this.isProcessing = false;
         this.chatHistory = [{ type: 'bot', text: 'Hi there! Upload a transcript or audio file, or paste text to begin. Then, ask me questions about it.' }];
   
-        this.elements.uploadSection.style.display = 'flex';
-        this.elements.loadingSection.style.display = 'none';
-        this.elements.chatSection.classList.add('d-none');
+        if (this.elements.uploadSection) this.elements.uploadSection.style.display = 'flex';
+        if (this.elements.loadingSection) this.elements.loadingSection.style.display = 'none';
+        if (this.elements.chatSection) this.elements.chatSection.classList.add('d-none');
   
-        this.elements.fileInput.value = '';
-        this.elements.fileName.textContent = '';
-        this.elements.fileFeedback.style.display = 'none';
-        this.elements.fileFeedback.textContent = '';
-        this.elements.transcriptOptions.style.display = 'none';
-        this.elements.audioContainer.style.display = 'none';
-        this.elements.audioPlayer.src = '';
-        this.elements.transcriptInput.value = '';
-        this.elements.uniqueIdInput.value = '';
+        if (this.elements.fileInput) this.elements.fileInput.value = '';
+        if (this.elements.fileName) this.elements.fileName.textContent = '';
+        if (this.elements.fileFeedback) this.elements.fileFeedback.style.display = 'none';
+        if (this.elements.fileFeedback) this.elements.fileFeedback.textContent = '';
+        if (this.elements.transcriptOptions) this.elements.transcriptOptions.style.display = 'none';
+        if (this.elements.audioContainer) this.elements.audioContainer.style.display = 'none';
+        if (this.elements.audioPlayer) this.elements.audioPlayer.src = '';
+        if (this.elements.transcriptInput) this.elements.transcriptInput.value = '';
+        if (this.elements.uniqueIdInput) this.elements.uniqueIdInput.value = '';
+  
         this.scrollChatToBottom();
       },
   
        showFileFeedback(type, message) {
+          if (!this.elements.fileFeedback) return;
           this.elements.fileFeedback.textContent = message;
           this.elements.fileFeedback.className = `file-feedback ${type}`;
           this.elements.fileFeedback.style.display = 'block';
@@ -114,6 +124,15 @@ const chatApp = Vue.createApp({
         if (!file) return;
         const allowedTypes = ['text/plain', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a'];
         const maxFileSize = 25 * 1024 * 1024;
+  
+        // Check element existence before accessing properties
+        if (!this.elements.fileInput || !this.elements.fileName || !this.elements.transcriptOptions ||
+            !this.elements.audioContainer || !this.elements.audioPlayer || !this.elements.transcriptInput ||
+            !this.elements.processWithoutTranscriptBtn || !this.elements.uniqueIdInput) {
+            console.error("One or more chat UI elements are missing.");
+            return;
+        }
+  
   
         if (!allowedTypes.some(type => file.type.startsWith(type.split('/')[0]))) {
           this.showFileFeedback('error', 'Invalid file type. Allowed: .txt, .pdf, .doc(x), audio files.');
@@ -132,15 +151,22 @@ const chatApp = Vue.createApp({
         this.currentAudioFile = null;
         this.elements.audioContainer.style.display = 'none';
         this.elements.transcriptInput.value = '';
-        this.elements.processWithoutTranscriptBtn.disabled = true; // Disable by default
+        this.elements.processWithoutTranscriptBtn.disabled = true;
   
         if (file.type.startsWith('audio/')) {
           this.currentAudioFile = file;
-          const audioUrl = URL.createObjectURL(file);
-          this.elements.audioPlayer.src = audioUrl;
-          this.elements.audioContainer.style.display = 'block';
-          this.elements.processWithoutTranscriptBtn.disabled = false; // Enable for audio
-          this.showFileFeedback('info', 'Audio ready. Provide transcript or click Transcribe.');
+          try {
+              const audioUrl = URL.createObjectURL(file);
+              this.elements.audioPlayer.src = audioUrl;
+              this.elements.audioContainer.style.display = 'block';
+              this.elements.processWithoutTranscriptBtn.disabled = false;
+              this.showFileFeedback('info', 'Audio ready. Provide transcript or click Transcribe.');
+          } catch (error) {
+               console.error("Error creating object URL for audio:", error);
+               this.showFileFeedback('error', 'Could not load audio preview.');
+               this.currentAudioFile = null; // Reset if preview fails
+               this.elements.processWithoutTranscriptBtn.disabled = true;
+          }
         } else if (file.type === 'text/plain') {
           const reader = new FileReader();
           reader.onload = (e) => {
@@ -157,6 +183,7 @@ const chatApp = Vue.createApp({
       },
   
       processWithTranscript() {
+          if (!this.elements.transcriptInput) return;
           const transcriptText = this.elements.transcriptInput.value.trim();
           if (!transcriptText) {
               this.showFileFeedback('error', 'Please paste or load transcript text.');
@@ -164,7 +191,7 @@ const chatApp = Vue.createApp({
           }
           this.currentTranscript = transcriptText;
           this.startChatSession();
-          this.saveTranscriptIfApplicable(); // Save after starting session
+          this.saveTranscriptIfApplicable();
       },
   
       processWithoutTranscript() {
@@ -176,6 +203,10 @@ const chatApp = Vue.createApp({
       },
   
       transcribeAudio(file) {
+          if (!this.elements.uploadSection || !this.elements.loadingSection || !this.elements.languageSelect) {
+               console.error("Cannot transcribe: Missing required UI elements.");
+               return;
+          }
           this.isProcessing = true;
           this.elements.uploadSection.style.display = 'none';
           this.elements.loadingSection.style.display = 'flex';
@@ -183,16 +214,35 @@ const chatApp = Vue.createApp({
   
           const formData = new FormData();
           formData.append('file', file);
-          // --- FIX: Read selected language value correctly ---
+  
+          // --- FIX: Ensure the *value* of the selected option is read ---
           const selectedLanguage = this.elements.languageSelect.value;
+          if (!selectedLanguage) {
+              console.error("Could not read selected language value.");
+               this.showFileFeedback('error', `Transcription failed: Could not get language selection.`);
+               this.resetChatView();
+               this.isProcessing = false;
+               this.elements.loadingSection.style.display = 'none';
+               return;
+          }
           formData.append('language', selectedLanguage);
-          console.log("Sending language to transcribe API:", selectedLanguage); // Debugging log
+          console.log("Sending language to transcribe API:", selectedLanguage);
           // --- END FIX ---
   
           fetch(this.transcribeApiUrl, { method: 'POST', body: formData })
               .then(response => {
                   if (!response.ok) {
-                      return response.text().then(text => { throw new Error(`Transcription failed: ${text || response.statusText}`) });
+                      // Try to get more specific error from AssemblyAI if possible
+                      return response.text().then(text => {
+                          let errorDetail = text;
+                          try { // AssemblyAI often returns JSON error details
+                              const jsonError = JSON.parse(text);
+                              if (jsonError && jsonError.error) {
+                                  errorDetail = jsonError.error;
+                              }
+                          } catch(e) { /* Ignore parsing error, use raw text */ }
+                          throw new Error(`Transcription failed (${response.status}): ${errorDetail}`)
+                      });
                   }
                   return response.text();
               })
@@ -200,20 +250,21 @@ const chatApp = Vue.createApp({
                   this.currentTranscript = transcriptText;
                   this.showFileFeedback('success', 'Audio transcribed successfully!');
                   this.startChatSession();
-                  this.saveTranscriptIfApplicable(); // Save after successful transcription
+                  this.saveTranscriptIfApplicable();
               })
               .catch(error => {
                   console.error("Transcription error:", error);
-                  this.showFileFeedback('error', `Transcription failed: ${error.message}. Cannot proceed with chat.`);
-                  // Don't proceed to chat if transcription fails and is required
-                  this.resetChatView(); // Go back to upload state
+                   // Display a more user-friendly error based on the caught message
+                  this.showFileFeedback('error', `${error.message}. Cannot proceed with chat.`);
+                  this.resetChatView();
                   this.isProcessing = false;
-                  this.elements.loadingSection.style.display = 'none';
+                   if (this.elements.loadingSection) this.elements.loadingSection.style.display = 'none';
               });
-               // .finally() removed as resetChatView handles UI cleanup on error
       },
   
        startChatSession() {
+           if (!this.elements.uploadSection || !this.elements.loadingSection || !this.elements.chatSection) return;
+  
            this.isProcessing = true;
            this.elements.uploadSection.style.display = 'none';
            this.elements.loadingSection.style.display = 'flex';
@@ -233,8 +284,8 @@ const chatApp = Vue.createApp({
           }
   
           try {
-              const db = await initializeFirebase(); // Wait for DB connection
-              if (!db) throw new Error("Database not available for saving.");
+              const db = await initializeFirebase();
+              if (!db || !db.ref) throw new Error("Database not available for saving.");
   
                const analysisData = this.analyzeTranscriptText(this.currentTranscript);
                const transcriptData = {
@@ -250,13 +301,12 @@ const chatApp = Vue.createApp({
   
            } catch(err) {
                console.error("Failed to save transcript from chat:", err);
-               // Optionally inform the user saving failed, but chat can continue
                this.addMessageToChat('bot', "(Note: Failed to save this transcript to the database.)");
            }
       },
   
        analyzeTranscriptText(text) {
-          if (!text) return {};
+          if (!text || typeof text !== 'string') return {}; // Add type check
           return {
               petType: this.detectPetType(text),
               petName: this.extractPetName(text),
@@ -268,7 +318,7 @@ const chatApp = Vue.createApp({
           };
       },
   
-      detectPetType(text) {
+      detectPetType(text = '') { // Add default value
         const lowerText = text.toLowerCase();
         const dogKeywords = ['dog', 'puppy', 'canine', 'doggie', 'pooch'];
         const catKeywords = ['cat', 'kitten', 'feline', 'kitty'];
@@ -280,7 +330,7 @@ const chatApp = Vue.createApp({
         return 'unknown';
       },
   
-      extractPetName(text) {
+      extractPetName(text = '') { // Add default value
          const patterns = [ /my (?:dog|cat|pet)\s(?:is\s)?(?:called|named)\s(\w+)/i, /(\w+)\s(?:is\s)?my (?:dog|cat|pet)/i, /have a (?:dog|cat|pet)\s(?:called|named)\s(\w+)/i, /pet's name is\s(\w+)/i ];
           for (const pattern of patterns) {
               const match = text.match(pattern);
@@ -290,14 +340,14 @@ const chatApp = Vue.createApp({
           const petKeywords = ['dog', 'cat', 'pet', 'puppy', 'kitten'];
           for (let i = 0; i < words.length; i++) {
                if (/^[A-Z][a-z]{2,}$/.test(words[i]) && !['I', 'He', 'She', 'They', 'My', 'The'].includes(words[i])) {
-                   if (i > 0 && petKeywords.includes(words[i-1].toLowerCase().replace(/[.,!?]/g, ''))) return words[i];
-                   if (i < words.length - 1 && petKeywords.includes(words[i+1].toLowerCase().replace(/[.,!?]/g, ''))) return words[i];
+                  if (i > 0 && petKeywords.includes(words[i-1]?.toLowerCase().replace(/[.,!?]/g, ''))) return words[i]; // Add safe navigation
+                  if (i < words.length - 1 && petKeywords.includes(words[i+1]?.toLowerCase().replace(/[.,!?]/g, ''))) return words[i]; // Add safe navigation
               }
           }
          return 'Unknown';
       },
   
-      detectLifeStage(text) {
+      detectLifeStage(text = '') { // Add default value
         const lowerText = text.toLowerCase();
         if (/\b(puppy|kitten|young|baby|newborn|\d+\s+months? old|\d+\s+weeks? old)\b/.test(lowerText)) return 'puppy';
         if (/\b(senior|older|elderly|aging|geriatric|old dog|old cat)\b/.test(lowerText)) return 'senior';
@@ -305,7 +355,7 @@ const chatApp = Vue.createApp({
         return 'unknown';
       },
   
-       assessKnowledgeLevel(text) {
+       assessKnowledgeLevel(text = '') { // Add default value
           const lowPatterns = [/don't know/i, /not sure/i, /confused/i, /what should i/i, /how do i/i, /first-time/i];
           const highPatterns = [/i've researched/i, /i read that/i, /according to/i, /understand that/i, /the vet recommended/i, /i've been (feeding|giving)/i];
           const lowMatches = lowPatterns.filter(p => p.test(text)).length;
@@ -316,7 +366,7 @@ const chatApp = Vue.createApp({
           return 'medium';
       },
   
-       extractKeyIssues(text) {
+       extractKeyIssues(text = '') { // Add default value
           const issues = new Set();
           const categories = {
               diet: ['food', 'feed', 'diet', 'eating', 'nutrition', 'meal', 'appetite', 'kibble', 'treats'],
@@ -333,7 +383,7 @@ const chatApp = Vue.createApp({
           return issues.size > 0 ? Array.from(issues).join(', ') : 'general';
       },
   
-      detectCustomerCategory(text) {
+      detectCustomerCategory(text = '') { // Add default value
           const lowerText = text.toLowerCase();
           const foodKeywords = ['food', 'diet', 'feeding', 'nutrition', 'meal', 'kibble', 'wet food', 'dry food', 'treats'];
           const pharmacyKeywords = ['medicine', 'medication', 'prescription', 'tablets', 'pills', 'treatment', 'therapy', 'arthritis', 'vaccination', 'supplement', 'flea', 'tick', 'worm'];
@@ -345,12 +395,13 @@ const chatApp = Vue.createApp({
           return 'general';
       },
   
-      detectClinicPitch(text) {
+      detectClinicPitch(text = '') { // Add default value
           const clinicKeywords = ['vet visit', 'veterinary clinic', 'check-up', 'examination', 'schedule an appointment', 'visit the vet', 'bring (him|her|them|your pet) in', 'veterinary care', 'clinic', 'veterinarian', 'vet appointment'];
           return clinicKeywords.some(keyword => text.toLowerCase().match(new RegExp(keyword.replace(/\s/g, '\\s*'), 'i')));
       },
   
       sendMessage() {
+        if (!this.elements.userInput) return;
         const userMessage = this.elements.userInput.value.trim();
         if (!userMessage || this.isProcessing) return;
   
@@ -383,7 +434,10 @@ const chatApp = Vue.createApp({
            this.$nextTick(() => {
               const chatMessages = this.elements.chatMessages;
               if (chatMessages) {
-                  chatMessages.scrollTop = chatMessages.scrollHeight;
+                  // Adding a small delay can sometimes help ensure layout is complete
+                  setTimeout(() => {
+                       chatMessages.scrollTop = chatMessages.scrollHeight;
+                  }, 50);
               }
            });
       },
@@ -391,13 +445,17 @@ const chatApp = Vue.createApp({
       formatMarkdown(text) {
           if (!text) return '';
           let html = text;
+          html = html.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>'); // Basic HTML escaping first
           html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
           html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
           html = html.replace(/`(.*?)`/g, '<code>$1</code>');
-          html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>');
+          html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
           html = html.replace(/^\s*[-*+]\s+(.*)/gm, '<li>$1</li>');
-          html = html.replace(/(<li>.*<\/li>\s*)+/g, (match) => `<ul>${match}</ul>`);
-          html = html.replace(/\n/g, '<br>');
+          // More robust list wrapping
+          html = html.replace(/((?:<li>.*?<\/li>\s*)+)/g, (match) => `<ul>${match.replace(/<br>\s*<li>/g, '<li>')}</ul>`); // Wrap and clean breaks within list
+          html = html.replace(/\n/g, '<br>'); // Replace remaining newlines
+          html = html.replace(/<ul>\s*<br>\s*<\/ul>/g, '</ul>'); // Clean up extra breaks around lists
+          html = html.replace(/<br>\s*<ul>/g, '<ul>');
           return html;
       },
   
@@ -425,7 +483,8 @@ const chatApp = Vue.createApp({
           });
   
           if (!response.ok) {
-            throw new Error(`API Error: ${response.statusText}`);
+            const errorText = await response.text();
+            throw new Error(`API Error (${response.status}): ${errorText || response.statusText}`);
           }
   
           const data = await response.json();
