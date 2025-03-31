@@ -2,178 +2,269 @@ const fs = require("fs");
 const formidable = require("formidable");
 const fetch = require("node-fetch");
 
-// Disable Vercel's default body parser so we can handle multipart/form-data.
+
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
-// Hardcoded AssemblyAI API key (no env vars used)
+
 const ASSEMBLYAI_API_KEY = "8d33d7d860054823815205dab400df2d";
 
-// Allowed origins for CORS.
+
 const ALLOWED_ORIGINS = [
   "https://supertails.vercel.app",
   "https://turbo-space-zebra-vjr594vv9xjhpq5q-5500.app.github.dev",
+  "http://localhost", // Allow localhost for local dev if needed
+  "http://127.0.0.1",
 ];
 
-// Set CORS headers if the origin is allowed.
+
 function setCorsHeaders(req, res) {
   const origin = req.headers.origin;
-  if (ALLOWED_ORIGINS.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
+
+  // Allow all origins in development, restrict in production
+  // This is a simplified check, you might want a more robust one
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  const allowOrigin = isDevelopment ? '*' : (ALLOWED_ORIGINS.includes(origin) ? origin : null);
+
+  if (allowOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", allowOrigin);
   }
+
+  // Always allow credentials if needed (adjust based on your auth flow)
+  // res.setHeader("Access-Control-Allow-Credentials", "true");
+
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization"); // Add Authorization if you use it
 }
 
-// Upload the audio file to AssemblyAI.
+
 async function uploadAudio(filePath) {
   const url = "https://api.assemblyai.com/v2/upload";
   console.log(`Uploading audio file from path: ${filePath}`);
-  const fileStream = fs.createReadStream(filePath);
+  let fileStream;
+  try {
+    fileStream = fs.createReadStream(filePath);
+  } catch (readErr) {
+      console.error("Error creating read stream:", readErr);
+      throw new Error("Failed to read uploaded file for upload.");
+  }
+
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "authorization": ASSEMBLYAI_API_KEY,
+      // Content-Type is set automatically by node-fetch with stream body
     },
     body: fileStream,
   });
-  const text = await response.text();
-  console.log("Upload response text:", text);
+
+  const responseBodyText = await response.text();
+  console.log("AssemblyAI Upload API response status:", response.status);
+  // console.log("AssemblyAI Upload API response body:", responseBodyText); // Sensitive, log carefully
+
+
+  if (!response.ok) {
+      console.error(`AssemblyAI Upload API Error (${response.status}): ${responseBodyText}`);
+      throw new Error(`Audio upload failed (status ${response.status}). Check server logs.`);
+  }
+
   try {
-    const data = JSON.parse(text);
-    if (!response.ok) {
-      throw new Error("Upload failed: " + (data.error || text));
+    const data = JSON.parse(responseBodyText);
+    if (!data.upload_url) {
+        console.error("Upload response missing 'upload_url':", data);
+        throw new Error("Upload succeeded but response format was unexpected.");
     }
     console.log("Uploaded file URL:", data.upload_url);
     return data.upload_url;
-  } catch (err) {
-    console.error("Error parsing upload response:", err);
-    throw new Error("Upload failed: " + text);
+  } catch (parseErr) {
+    console.error("Error parsing upload response JSON:", parseErr, "Body was:", responseBodyText);
+    throw new Error("Upload response was not valid JSON.");
   }
 }
 
-// Request a transcription job from AssemblyAI.
-// If languageCode is not "auto", send it as language_code; if it's "auto", enable auto-detection.
+
 async function requestTranscription(audioUrl, languageCode) {
   const url = "https://api.assemblyai.com/v2/transcript";
   console.log("Requesting transcription for audio URL:", audioUrl, "with language code:", languageCode);
-  const jsonData = { audio_url: audioUrl };
+  const payload = { audio_url: audioUrl };
   if (languageCode && languageCode !== "auto") {
-    jsonData["language_code"] = languageCode;
-  } else if (languageCode === "auto") {
-    jsonData["language_detection"] = true;
+    payload["language_code"] = languageCode;
+  } else {
+    payload["language_detection"] = true; // Explicitly enable if 'auto' or not provided
   }
+
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "authorization": ASSEMBLYAI_API_KEY,
       "content-type": "application/json",
     },
-    body: JSON.stringify(jsonData),
+    body: JSON.stringify(payload),
   });
-  const text = await response.text();
-  console.log("Transcription request response text:", text);
+
+  const responseBodyText = await response.text();
+  console.log("AssemblyAI Transcription Request API response status:", response.status);
+  // console.log("AssemblyAI Transcription Request API response body:", responseBodyText);
+
+
+   if (!response.ok) {
+      console.error(`AssemblyAI Transcription Request API Error (${response.status}): ${responseBodyText}`);
+      throw new Error(`Transcription request failed (status ${response.status}). Check server logs.`);
+  }
+
   try {
-    const data = JSON.parse(text);
-    if (!response.ok) {
-      throw new Error("Transcription request failed: " + (data.error || text));
+    const data = JSON.parse(responseBodyText);
+     if (!data.id) {
+        console.error("Transcription request response missing 'id':", data);
+        throw new Error("Transcription request succeeded but response format was unexpected.");
     }
     console.log("Transcription job ID:", data.id);
     return data.id;
-  } catch (err) {
-    console.error("Error parsing transcription request response:", err);
-    throw new Error("Transcription request failed: " + text);
+  } catch (parseErr) {
+     console.error("Error parsing transcription request response JSON:", parseErr, "Body was:", responseBodyText);
+     throw new Error("Transcription request response was not valid JSON.");
   }
 }
 
-// Poll AssemblyAI until the transcription is complete.
+
 async function pollTranscription(transcriptId) {
   const url = `https://api.assemblyai.com/v2/transcript/${transcriptId}`;
+  const maxAttempts = 20; // Limit polling attempts (~1 minute)
+  let attempt = 0;
+
   console.log("Polling transcription status for ID:", transcriptId);
-  while (true) {
+
+  while (attempt < maxAttempts) {
+    attempt++;
+    console.log(`Polling attempt ${attempt}/${maxAttempts} for ${transcriptId}`);
+
     const response = await fetch(url, {
       method: "GET",
-      headers: {
-        "authorization": ASSEMBLYAI_API_KEY,
-      },
+      headers: { "authorization": ASSEMBLYAI_API_KEY },
     });
-    const text = await response.text();
-    console.log("Polling response text:", text);
+
+    const responseBodyText = await response.text();
+    // console.log("Polling response text:", responseBodyText); // Can be verbose
+
+
+     if (!response.ok) {
+        console.error(`AssemblyAI Polling API Error (${response.status}): ${responseBodyText}`);
+        // Decide if error is terminal or retryable (e.g. 404 might mean ID invalid)
+        if (response.status === 404) throw new Error(`Transcription ID ${transcriptId} not found.`);
+         throw new Error(`Polling failed (status ${response.status}). Check server logs.`);
+    }
+
+
     let data;
     try {
-      data = JSON.parse(text);
-    } catch (err) {
-      console.error("Error parsing polling response:", err);
-      throw new Error("Polling failed: " + text);
+      data = JSON.parse(responseBodyText);
+    } catch (parseErr) {
+        console.error("Error parsing polling response JSON:", parseErr, "Body was:", responseBodyText);
+        throw new Error("Polling response was not valid JSON.");
     }
+
+    console.log(`Transcription status for ${transcriptId}: ${data.status}`);
+
     if (data.status === "completed") {
-      console.log("Transcription completed:", data.text);
-      return data.text;
+      console.log("Transcription completed successfully.");
+      return data.text || ""; // Return empty string if text is missing
     } else if (data.status === "error") {
-      throw new Error("Transcription error: " + data.error);
+      console.error("Transcription job failed:", data.error);
+      throw new Error("Transcription failed: " + data.error);
+    } else if (data.status === "queued" || data.status === "processing") {
+      // Wait before next poll
+      await new Promise((resolve) => setTimeout(resolve, 3000)); // 3 second delay
+    } else {
+        console.warn("Unknown transcription status:", data.status);
+        // Optionally treat unknown status as error or continue polling
+         await new Promise((resolve) => setTimeout(resolve, 3000));
     }
-    console.log("Transcription status:", data.status, "- waiting 3 seconds...");
-    await new Promise((resolve) => setTimeout(resolve, 3000));
   }
+
+  // If loop finishes without completion
+  console.error(`Transcription ${transcriptId} timed out after ${maxAttempts} attempts.`);
+  throw new Error("Transcription timed out.");
 }
 
-// Vercel serverless function handler.
+
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
 
-  // Handle CORS preflight requests.
+
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    console.log("Handling OPTIONS request");
+    return res.status(204).end(); // Use 204 No Content for OPTIONS
   }
+
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    console.log(`Method not allowed: ${req.method}`);
+    res.setHeader("Allow", "POST, OPTIONS");
+    return res.status(405).json({ error: "Method Not Allowed" });
   }
 
   console.log("Received POST request for transcription.");
 
-  // Parse multipart/form-data using formidable.
-  const form = formidable({ multiples: false, keepExtensions: true, uploadDir: "/tmp" });
 
-  form.parse(req, async (err, fields, files) => {
-    if (err) {
-      console.error("Error parsing form data:", err);
-      return res.status(500).json({ error: "Error parsing form data: " + err.message });
-    }
-    if (!files.file) {
-      console.error("No file provided in form data.");
-      return res.status(400).json({ error: "No file provided" });
+  const form = formidable({
+      multiples: false,
+      keepExtensions: true,
+      uploadDir: "/tmp", // Vercel allows writing to /tmp
+      maxFileSize: 25 * 1024 * 1024 // Set a reasonable max size (e.g., 25MB)
+  });
+
+   let filePathToDelete = null; // Keep track of the file path for cleanup
+
+   try {
+     const { fields, files } = await new Promise((resolve, reject) => {
+         form.parse(req, (err, fields, files) => {
+            if (err) {
+                console.error("Error parsing form data:", err);
+                // Check for specific errors like file size exceeded
+                if (err.code === 'LIMIT_FILE_SIZE') {
+                    return reject(new Error("File size limit exceeded."));
+                }
+                return reject(new Error("Error parsing form data."));
+            }
+            resolve({ fields, files });
+         });
+     });
+
+
+    if (!files.file || !files.file.filepath) { // V3 formidable uses filepath
+      console.error("No file provided or filepath missing in form data.");
+      return res.status(400).json({ error: "No file uploaded." });
     }
 
-    // Read language field from form (default to "auto" if not provided)
+    filePathToDelete = files.file.filepath; // Store path for cleanup
     const languageCode = fields.language || "auto";
     console.log("Language code received:", languageCode);
+    console.log("File received, stored temporarily at:", filePathToDelete);
 
-    const filePath = files.file.filepath || files.file.path;
-    console.log("File received, stored at:", filePath);
-    try {
-      // Upload file to AssemblyAI.
-      const audioUrl = await uploadAudio(filePath);
-      // Request transcription with the selected language option.
-      const transcriptId = await requestTranscription(audioUrl, languageCode);
-      // Poll until transcription completes.
-      const transcriptionText = await pollTranscription(transcriptId);
-      console.log("Returning transcription text.");
-      res.status(200).setHeader("Content-Type", "text/plain").send(transcriptionText);
-    } catch (error) {
-      console.error("Error during transcription process:", error);
-      res.status(500).json({ error: error.message });
-    } finally {
-      // Delete the temporary file.
-      fs.unlink(filePath, (unlinkErr) => {
-        if (unlinkErr) {
-          console.error("Error deleting temporary file:", unlinkErr);
-        } else {
-          console.log("Temporary file deleted.");
-        }
-      });
-    }
-  });
+
+    const audioUrl = await uploadAudio(filePathToDelete);
+    const transcriptId = await requestTranscription(audioUrl, languageCode);
+    const transcriptionText = await pollTranscription(transcriptId);
+
+    console.log("Transcription successful, returning text.");
+    res.status(200).setHeader("Content-Type", "text/plain").send(transcriptionText);
+
+  } catch (error) {
+    console.error("Error during transcription process:", error);
+    // Send a generic error message to the client
+    res.status(500).json({ error: error.message || "An internal server error occurred during transcription." });
+  } finally {
+     // Cleanup the temporary file
+     if (filePathToDelete) {
+         fs.unlink(filePathToDelete, (unlinkErr) => {
+             if (unlinkErr) {
+                 console.error("Error deleting temporary file:", filePathToDelete, unlinkErr);
+             } else {
+                 console.log("Temporary file deleted successfully:", filePathToDelete);
+             }
+         });
+     }
+  }
 }
